@@ -1,0 +1,832 @@
+/*
+$Id$
+*/
+
+
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns adv = "http://xml.juniper.net/adventure";
+ns func extension = "http://exslt.org/functions";
+ns test = "http://xml.juniper.net/test";
+ns exsl extension = "http://exslt.org/common";
+
+import "../import/junos.xsl";
+match / {
+	
+		
+/****************************Saving configuration file at /var/home/full/*************************************************************/
+
+	expr jcs:output("\n \n Welcome to Router Upgradation MOP ");
+	expr jcs:output("\n This script removes the traffic and sets the router in overload ");
+	expr test:Continue_Prompt_Function();
+
+
+	var $regex 		= "([[:digit:]]*)-([[:digit:]]*)-([[:digit:]]*) ([0-9]*):([0-9]*):([0-9]*).*";
+	var $result 		= jcs:regex($regex, $localtime-iso );
+	var $Router_Name 	= <command> "show version";
+	var $O_Router_Name 	= jcs:invoke($Router_Name);
+	var $Actual_Router_Name	= $O_Router_Name/host-name;
+	var $File_name		= $Actual_Router_Name _ "." _ $result[3] _ $result[4] _ substring($result[2],3,4);
+
+	expr jcs:output("\n Saving the router configuration at /var/home/full/" _ $File_name);
+
+
+	var $Save_Configuration 	= <get-configuration format="text"> ;
+	var $O_Save_Configuration 	= jcs:invoke( $Save_Configuration);
+	var $writing = <file-put> {
+	<filename>"/var/home/full/" _ $File_name;
+	<encoding> "ascii";
+	<permission> "644";
+	<delete-if-exist>;
+	<file-contents> $O_Save_Configuration;
+				}
+
+	var $result-writing 		= jcs:invoke( $writing );
+
+	if($result-writing//self::xnm:error)
+	{
+		expr jcs:output($result-writing);
+		expr jcs:output("\n File transfer failed !.Please exit the script and check if the path /var/home/full/ is valid ");
+		expr test:Quit_Prompt_Function();
+	
+	}
+
+
+
+
+/**************************************Transferring the config file to TFTP server FTP****************************************************/
+
+	
+	expr test:FTP_File_Transfer("/var/home/full/" _ $File_name,$File_name);
+
+	var $Config_File_Checksum	= <get-checksum-information>{
+					<path>"/var/home/full/" _ $File_name;
+							}
+	var $O_Config_File_Checksum	= jcs:invoke($Config_File_Checksum);
+	expr jcs:output("\n The md5 checksum of the file is " _ $O_Config_File_Checksum/file-checksum/checksum);
+	expr jcs:output("\n Please check whether the md5 matches to the md5 of the file in the TFTP server ");
+	expr test:Continue_Prompt_Function();
+
+
+
+/**************************Searching for the install file and dowloading from back up if not present*************************************/
+/****************************************************************************************************************************************/
+
+	var $Code_path_file		= "/var/home/full/";
+	expr jcs:output("\n Searching for code file if exists on router at " _ $Code_path_file);
+	var $File_Search		=  <file-list>{
+			
+			<path> $Code_path_file;
+					}
+	var $O_File_Search		= jcs:invoke($File_Search);
+	
+
+	if($O_File_Search/directory/file-information[starts-with(file-name,"jinstall")])
+	{
+		expr jcs:output("\n File exists in " _ $Code_path_file);
+	}
+	else
+	{
+
+		if($junos-context/routing-engine-name=="re0")
+		{
+			var $Other_Code_path_file		= "re1:/var/home/full/";
+			var $Other_File_Search	=  <file-list>{
+							<path> $Other_Code_path_file;
+								}
+			var $Other_O_File_Search		= jcs:invoke($Other_File_Search);
+
+			var $Search_Variable			= $Other_O_File_Search/multi-routing-engine-item/directory-list;
+			
+			if($Search_Variable/directory/file-information[starts-with(file-name,"jinstall")])
+			{
+				
+				expr jcs:output("\n File present in other routing engine ");
+				
+
+				var $Source_File = $Other_Code_path_file _ $Search_Variable/directory/file-information[starts-with(file-name,"jinstall")]/file-name;
+				var $Destination_File= $Code_path_file _ $Search_Variable/directory/file-information[starts-with(file-name,"jinstall")]/file-name;
+				
+				expr test:Routing_Engine_File_Transfer($Source_File,$Destination_File);
+				expr jcs:output("\n File downloaded from routing engine re1 !");
+			}
+			else
+			{
+				expr jcs:output("\n File not present in other routing engine re1 ! ");
+				expr test:Continue_Prompt_Function();
+			}
+		}
+		else
+		{
+			var $Other_Code_path_file		= "re0:/var/home/full/";
+			var $Other_File_Search	=  <file-list>{
+							<path> $Other_Code_path_file;
+								}
+			var $Other_O_File_Search		= jcs:invoke($Other_File_Search);
+			
+			var $Search_Variable			= $Other_O_File_Search/multi-routing-engine-item/directory-list;
+			
+			if($Search_Variable/directory/file-information[starts-with(file-name,"jinstall")])
+			{
+				
+				expr jcs:output("\n File present in othe routing engine ");
+				
+
+				var $Source_File = $Other_Code_path_file _ $Search_Variable/directory/file-information[starts-with(file-name,"jinstall")]/file-name;
+				var $Destination_File= $Code_path_file _ $Search_Variable/directory/file-information[starts-with(file-name,"jinstall")]/file-name;
+				
+				expr test:Routing_Engine_File_Transfer($Source_File,$Destination_File);
+				expr jcs:output("\n File downloaded from routing engine re0 !");
+			}
+			else
+			{
+				expr jcs:output("\n File not present in other routing engine re0 ! ");
+				expr test:Continue_Prompt_Function();
+			}
+			
+		
+		}
+	}
+	
+
+/*****************************************************************************************************************************************/
+/*****************************************Downloading the image file from FTP server******************************************************/
+
+	var $Image_File_Path	= test:Bit_Finder();
+	expr jcs:output("\n The image file is saved at " _ $Image_File_Path);
+	
+	var $Image_Config_File_Checksum	= <get-checksum-information>{
+					<path> $Image_File_Path;
+							}
+	var $O_Image_Config_File_Checksum	= jcs:invoke($Image_Config_File_Checksum);
+	expr jcs:output("\n The md5 checksum of the file is " _ $O_Image_Config_File_Checksum/file-checksum/checksum);
+	expr jcs:output("\n Please check whether the md5 matches to the md5 of the file in the TFTP server ");
+	expr test:Continue_Prompt_Function();
+	expr jcs:output("Checked Started" _ $Image_File_Path);
+	if($junos-context/routing-engine-name=="re0")
+	{
+		expr test:Routing_Engine_File_Transfer($Image_File_Path,"re1:" _ $Image_File_Path);
+	}
+	else
+	{
+		expr test:Routing_Engine_File_Transfer($Image_File_Path,"re0:" _ $Image_File_Path);
+	}
+
+/***********************************************show system storage***********************************************************************/
+
+	var $Show_System_Storage	= <command> "show system storage";
+	var $O_Show_System_Storage	= jcs:invoke($Show_System_Storage);
+	
+	if(($O_Show_System_Storage/filesystem[contains(filesystem-name,"ad0") && (mounted-on=="/")]))
+	{
+		expr jcs:output("\n File system " _ filesystem-name _ "mounted-on" _ mounted-on);
+		expr jcs:output("\n The router is properly booted from flash disk ");
+	}
+	else
+	{
+		expr jcs:output("\n The router is not properly booted from flash disk .Please quit and debug the issue before the software upgrade");
+		expr test:Quit_Prompt_Function();
+	}
+
+
+/**************************************Ensure the “compact flash” and “disk” are in the bootlist:*****************************************/
+
+	var $connection = jcs:open();
+        var $sysctl_bootdev = {
+            <request-shell-execute> {
+                <command> "sysctl -a | grep bootdevs";
+			
+            }
+        }
+        var $o_sysctl_bootdev = jcs:execute($connection,$sysctl_bootdev);
+     
+        if((contains($o_sysctl_bootdev,"compact-flash") && contains($o_sysctl_bootdev,"disk")))
+	{
+		expr jcs:output($o_sysctl_bootdev);
+		expr jcs:output("\n compact-flash and disk are in the bootlist ");
+	}
+	else
+	{
+		expr jcs:output("\n Please quit and use (sysctl -w machdep.bootdevs=pcmcia-flash,compact-flash,disk,lan) in super user mode to add compact-flash and disk
+in the bootlist  ");
+		expr test:Quit_Prompt_Function();
+			
+            					
+	}
+
+/********************************************************* Traffic maintenence************************************************************/
+
+	expr test:Configuration_Xml_Saved($File_name _ ".xml");
+	call Traffic_Removal_Function();
+	/*expr test:Traffic_Removal_Function();*/
+
+
+/*********************************************************request system snapshot*********************************************************/
+
+	var $request_system_snapshot	= <command> "request system snapshot";
+	var $o_request_system_snapshot	= jcs:invoke($request_system_snapshot);
+	if($o_request_system_snapshot//self::xnm:error || $o_request_system_snapshot//self::xnm:warning)
+	{
+		expr jcs:output("\n The software and configuration are not archived onto the /altroot and /altconfig file systems ");
+		expr jcs:output("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
+		expr test:Quit_Prompt_Function();
+	}
+	else
+	{
+		expr jcs:output("\n The software and configuration are archived onto the /altroot and /altconfig file systems ");
+	}
+
+/*********************************************************routing engine switch*********************************************************/
+
+	
+	var $Routing_Engine_Checker	= <command> " show chassis routing-engine ";
+	var $O_Routing_Engine_Checker	= jcs:invoke($Routing_Engine_Checker);
+	
+	if($O_Routing_Engine_Checker/route-engine[(slot=="0")&&(mastership-state=="master")])
+	{
+		expr jcs:output("\n Re0 is Configured as Master. Good to go ");	
+	}
+	else
+	{
+		expr jcs:output("\n Re0 is not configured as Master! ");
+		expr test:Routing_Engine_Membership();
+		
+	}
+
+/****************************************************************************************************************/
+	
+	expr jcs:output("\n Please use following command to upgrade routing engines");
+	expr jcs:output("\n request system software add " _ $Image_File_Path);
+	expr jcs:output("\n request system reboot media compact-flash"); 
+
+	
+	
+	
+}
+
+
+<func:function name="test:Routing_Engine_Membership">
+{
+	
+	var $Routing_Engine_Switch	= <command> "request chassis routing-engine master switch";
+	var $O_Routing_Engine_Switch	= jcs:invoke($Routing_Engine_Switch);
+	expr jcs:output($O_Routing_Engine_Switch);
+
+	var $Routing_Engine_Checker	= <command> " show chassis routing-engine ";
+	var $O_Routing_Engine_Checker	= jcs:invoke($Routing_Engine_Checker);
+	
+	if($O_Routing_Engine_Checker/route-engine[(slot=="0")&&(mastership-state=="master")])
+	{
+		expr jcs:output("\n Re0 is Configured as Master. Good to go ");	
+	}
+	else
+	{
+		expr jcs:output("\n Re0 is not configured as Master! ");
+		expr test:Routing_Engine_Membership();
+	}
+
+}
+
+
+<func:function name="test:Configuration_Xml_Saved">
+{
+
+	param $File_Name;
+	var $xml_config		= <get-configuration format="xml">;
+	var $o_xml_config	= jcs:invoke($xml_config);
+	var $File_Name_Xml	= $File_Name;
+	<exsl:document href="/var/tmp/" _ $File_Name_Xml>{
+					copy-of $o_xml_config;
+							}
+	
+	var $xml-file-copy	=<file-copy> {
+     			 		<source> "/var/tmp/" _ $File_Name_Xml;
+      					<destination> "/var/home/full/" _ $File_Name_Xml;
+						
+    					}
+	
+	var $results-xml = jcs:invoke($xml-file-copy);
+	if ($results-xml//self::xnm:error || $results-xml//self::xnm:warning)
+	{
+		expr jcs:output($results-xml);
+		expr jcs:output("\n File transer failed ! Please quit and check connections ");
+		expr test:Quit_Prompt_Function();
+	}
+	else
+	{
+		expr jcs:output("\n Backup file saved as /var/home/full/" _ $File_Name_Xml);
+	}
+
+	
+	expr test:FTP_File_Transfer("\n /var/home/full/" _ $File_Name_Xml,$File_Name_Xml);
+}
+
+
+
+
+
+
+
+
+
+
+
+<func:function name="test:Software_Add_Routing_Engine">
+{
+		param $Image_File_Path;
+		param $Routing_Engine_Number;
+		var $Upgrade_file_add	= <command> "request system software add " _ $Image_File_Path _ " reboot " _ $Routing_Engine_Number;
+
+		var $O_Upgrade_file_add	= jcs:invoke($Upgrade_file_add);
+
+		if($O_Upgrade_file_add//self::xnm:error || $O_Upgrade_file_add//self::xnm:warning)
+		{
+			expr jcs:output("\n Error in loading the file! ");
+		}
+		else
+		{
+			expr jcs:output("\n File loaded successfully! ");
+		}
+
+}
+
+
+
+<func:function name="test:FTP_Config_Path_Finder">
+{
+	var $FTP_Config_option	= jcs:get-input("\n Is the file at /prod/img directory at TFTP server ");
+	if($FTP_Config_option=="yes")
+	{
+		var $FTP_Config_path= "/prod/img/";
+		<func:result select="$FTP_Config_path">;
+	}
+	else
+	{
+		if($FTP_Config_option=="no")
+		{
+			var $FTP_Config_path=jcs:get-input("\n please give the path from root ");
+			<func:result select="$FTP_Config_path">;
+		}
+		else
+		{
+			var $FTP_Config_path	= test:FTP_Config_Path_Finder();
+			<func:result select="$FTP_Config_path">;
+		}
+	}
+}
+
+<func:function name="test:FTP_File_Transfer_Software">
+{
+	param $Source_File;
+	param $Destination_File;
+	var $FTP_IP 		= jcs:get-input("\n Please enter the IP address of the FTP server " );
+	var $FTP_Hostname	= jcs:get-input("\n Please enter user name of the FTP server " );
+	var $Password		= jcs:get-secret("\n Please enter the password ");
+	
+	var $FTP_Config_path	= test:FTP_Config_Path_Finder();
+	
+	var $Temp		="ftp://" _ $FTP_Hostname _ ":" _ $Password _ "@" _ $FTP_IP _ $FTP_Config_path _  $Source_File;
+
+	var $file-copy-xml-rpc = <file-copy> {
+     			 	<source> $Temp;
+      				<destination> $Destination_File;
+						
+    						}
+	expr jcs:output("\n Source file :" _ $Temp);
+	expr jcs:output("\n Destination file : " _ $Destination_File);
+	var $results-xml = jcs:invoke($file-copy-xml-rpc);
+	if ($results-xml//self::xnm:error)
+	{
+		expr jcs:output($results-xml);
+		expr jcs:output("\n File transer failed ! Please try again ");
+		var $Success_Destination_File = test:Bit_Finder();
+		<func:result select="$Success_Destination_File">;
+	}
+	else
+	{
+		expr jcs:output("\n File transfered successfully ! ");
+		<func:result select="$Destination_File">;
+	}
+	
+}
+
+
+
+<func:function name="test:FTP_File_Transfer">
+{
+	param $Source_File;
+	param $Destination_File;
+	var $FTP_IP 		= jcs:get-input( "\n Please enter the IP address of the FTP server " );
+	var $FTP_Hostname	= jcs:get-input( "\n Please enter user name of the FTP server " );
+	var $Password		= jcs:get-secret( "\n Please enter the password ");
+	
+	var $FTP_Config_path	= test:FTP_Config_Path_Finder();
+	
+	var $Temp		="ftp://" _ $FTP_Hostname _ ":" _ $Password _ "@" _ $FTP_IP _ $FTP_Config_path _  $Destination_File;
+
+	var $file-copy-xml-rpc = <file-copy> {
+     			 	<source> $Source_File;
+      				<destination> $Temp;
+						
+    						}	
+	var $results-xml = jcs:invoke($file-copy-xml-rpc);
+	if ($results-xml//self::xnm:error)
+	{
+		expr jcs:output($results-xml);
+		expr jcs:output("\n File transer failed ! Please try again ");
+		expr test:FTP_File_Transfer($Source_File,$Destination_File);
+	}
+	else
+	{
+		expr jcs:output("\n File transfered successfully ! ");
+	}
+	
+}
+
+
+<func:function name="test:Routing_Engine_File_Transfer">
+{
+	param $Source_File;
+	param $Destination_File;
+
+	
+	var $file-copy-xml-rpc = <file-copy> {
+     			 	<source> $Source_File;
+      				<destination> $Destination_File;
+						
+    						}
+		
+	var $results-xml = jcs:invoke($file-copy-xml-rpc);
+	if ($results-xml//self::xnm:error)
+	{
+		expr jcs:output($results-xml);
+		expr jcs:output("\nFile transer failed ! Please quit anc check connections ");
+		expr test:Continue_Prompt_Function();
+	}
+	else
+	{
+		expr jcs:output("\n File transfered successfully ! ");
+	}
+	
+	expr jcs:output("\n Source File : " _ $Source_File);
+	expr jcs:output("\n Destination File : " _ $Destination_File);
+}
+
+
+
+<func:function name="test:Continue_Prompt_Function">
+{
+	var $var = jcs:get-input( "\n Do you want to continue (yes/no) ?  " );
+	if($var=="no")     
+	{ 
+	  		<xsl:message terminate="yes"> "Aborting the script";
+	} 
+	else
+	{
+		if($var!="yes")
+		{
+		
+			<xsl:message> "Please choose between 'yes' or 'no'.\n";
+			expr test:Continue_Prompt_Function();
+				
+			
+		}
+	}
+	
+}
+
+
+
+
+
+<func:function name="test:Quit_Prompt_Function">
+{
+	var $var = jcs:get-input( "\n Do you want to Quit (yes/no) ? " );
+	if($var=="yes")     
+	{ 
+	  		<xsl:message terminate="yes"> "Aborting the script";
+	} 
+	else
+	{
+		if($var!="no")
+		{
+		
+			<xsl:message> "\n Please choose between 'yes' or 'no'.\n";
+			expr test:Quit_Prompt_Function();
+				
+			
+		}
+	}
+	
+}
+
+
+<func:function name="test:Bit_Finder">
+{
+	var $Find_bit	=  <get-chassis-inventory>;
+	var $O_Find_bit = jcs:invoke($Find_bit);
+
+	var $Path_Find_bit = $O_Find_bit/chassis/chassis-module[contains(name,"Engine")]/model-number;
+
+	if( ($Path_Find_bit=="RE-S-1800x2-8G") || ($Path_Find_bit=="RE-S-1800x2-16G") || ($Path_Find_bit=="RE-S-1800x4-8G") || ($Path_Find_bit==RE-S-1800x4-16G))
+	{
+		var $Source_File		=jcs:get-input("\n Please enter the image file name ");/*"jinstall64-13.3R3-S8.2-domestic-signed.tgz";*/
+		expr jcs:output("\n Downloading the 64 bit image file " _ $Source_File);
+		var $Destination_File	="/var/home/full/" _ $Source_File;	
+		var $Success_Destination_File = test:FTP_File_Transfer_Software($Source_File,$Destination_File);	
+		<func:result select="$Success_Destination_File">;
+	}
+	else
+	{
+		var $Source_File		= jcs:get-input("\n Please enter the image file name ");/*"jinstall-13.3R3-S8.2-domestic-signed.tgz";*/
+		expr jcs:output("\n Downloading the 32 bit image file " _ $Source_File);
+		var $Destination_File	="/var/home/full/" _ $Source_File;
+		var $Success_Destination_File = test:FTP_File_Transfer_Software($Source_File,$Destination_File);	
+		<func:result select="$Success_Destination_File">;
+	}
+
+}
+
+/*<func:function name="test:Traffic_Removal_Function">*/
+template Traffic_Removal_Function()
+{
+	expr jcs:output("\n\n Hello! Welcome to Automated MOP \n");
+	expr jcs:output("\n\n Checking for whether the router is connected to VOIP equipment .\n ");
+	expr test:Continue_Prompt_Function();
+
+/************************************* saving the configuration **************************************************************************/	
+	
+
+
+	expr jcs:output("\n ===========> Running show aps");
+
+/********************************************** show aps *********************************************************************************/
+
+	var $show_aps		= <command> "show aps";
+	var $o_show_aps		= jcs:invoke($show_aps);
+
+	if( ($o_show_aps/Interface)&&($o_show_aps) && not(($o_show_aps//self::xnm:warning)||($o_show_aps//self::xnm:error)))
+	{
+		expr jcs:output("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
+		expr test:Continue_Prompt_Function();
+	}
+
+/**********************************************  *********************************************************************************/
+	
+
+	
+
+	expr jcs:output("\n ===========> show bgp summary| match 1661");
+	
+	
+	
+	
+
+
+/********************************************** show bgp summary| match 1661 *************************************************************/
+
+	var $show_bgp 		= <command> "show bgp summary";
+	var $o_show_bgp 	= jcs:invoke($show_bgp);
+	
+	if($o_show_bgp/bgp-peer[peer-as==1661])
+	{
+		
+			expr jcs:output("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
+			expr test:Continue_Prompt_Function();			
+		
+			
+	}
+ 
+	expr jcs:output("\n ===========> show bfd session | match ^152");
+
+/********************************************** show bfd session | match ^152 ************************************************************/
+
+	var $show_bfd 		= <command> "show bfd session";
+	var $o_show_bfd		= jcs:invoke($show_bfd);
+	
+	if($o_show_bfd/bfd-session[starts-with(session-neighbor,152)])
+	{
+			expr jcs:output("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
+			expr test:Continue_Prompt_Function();	
+		
+	}
+	
+	
+	
+	expr jcs:output("\n ===========> show vrrp");
+
+/********************************************** show vrrp ********************************************************************************/
+
+	var $show_vrrp 		= <command> "show vrrp";
+	var $o_show_vrrp 	= jcs:invoke($show_vrrp);
+	
+	if( ($o_show_vrrp) && not(($o_show_vrrp//self::xnm:warning)||($o_show_vrrp//self::xnm:error)) ) 
+	{
+		expr jcs:output("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)");
+		expr test:Continue_Prompt_Function();
+	}
+
+	expr test:Continue_Prompt_Function();
+
+	expr jcs:output("\n ===========> show l2circuit connections");
+
+/********************************************** show l2circuit connections ***************************************************************/
+
+	var $show_l2connect 	= <command> "show l2circuit connections";
+	var $o_show_l2connect 	= jcs:invoke($show_l2connect);
+	 
+	if( ($o_show_l2connect/Neighbor)&&($o_show_l2connect) && not(($o_show_l2connect//self::xnm:warning)||($o_show_l2connect//self::xnm:error)) ) 
+	{
+		expr jcs:output("\n Look like it is XT1.SAC1 or XT2.HOU7 router ? ");
+		expr test:Continue_Prompt_Function();
+	}
+
+	expr jcs:output("\n ===========> show mpls lsp | match sig");
+
+/********************************************** show mpls lsp | match sig ****************************************************************/
+
+	var $show_mpls_lsp	= <command> "show mpls lsp";
+	var $o_show_mpls_lsp	= jcs:invoke($show_mpls_lsp);
+	
+	if($o_show_mpls_lsp/rsvp-session-data[session-type=="Ingress"]/rsvp-session/mpls-lsp[contains(name,"SIG")])
+	{
+			expr jcs:output("\n Look like it is XT1.SAC1 or XT2.HOU7 router ");
+			expr test:Continue_Prompt_Function();
+	}
+	
+	if($o_show_mpls_lsp/rsvp-session-data[session-type=="Egress"]/rsvp-session[contains(name,"SIG")])
+	{
+			expr jcs:output("\n Looks like it is XT1.SAC1 or XT2.HOU7 router ");
+			expr test:Continue_Prompt_Function();
+	}
+
+	
+	
+/********************************************** XR routers show adjacency ****************************************************************/
+/********************************************** show isis adjacency | match XR ***********************************************************/
+/********************************************** show bgp summary | match 705 *************************************************************/
+
+
+
+	var $show_isis_adjacency 	= <command> "show isis adjacency";
+	var $o_show_isis_adjacency	= jcs:invoke($show_isis_adjacency);
+	
+	if($o_show_isis_adjacency/isis-adjacency[contains(interface-name,"XR")])
+	{
+		expr jcs:output("\n Looks like XR router is directly connected. ");
+		expr jcs:output("\n Before going further please check on opposite plane XR devices to make sure the ISIS adjacencies to the upstream XT/XL are up");
+		expr test:Continue_Prompt_Function();
+	
+		if(not($o_show_bgp/bgp-peer[peer-as==705]))
+		{
+		
+			expr jcs:output("\n The BGP sessions to AS 705 is not present .Please resolve the issue before continuing ");
+			expr test:Continue_Prompt_Function();		
+		
+			
+		}
+		else
+		{
+			
+			expr jcs:output("\n Please check on for any eBGP sessions with AS 705 on other plane. The same BGP sessions should exist on both planes. ");
+			expr test:Continue_Prompt_Function();
+		}
+
+	}
+
+	var $connection = jcs:open();
+	expr jcs:output("\n ===========> Deactivating External BGP Neighbors");
+/********************************************** Deactivating External BGP Neighbors ******************************************************/
+
+ 	var $Bgp_Config=<get-configuration>;
+	var $O_Bgp_Config = jcs:invoke($Bgp_Config);
+
+	
+	
+	for-each($O_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")||starts-with(peer-as,"65")||starts-with(peer-as,"61")||starts-with(peer-as,"62"))])
+	{
+	expr jcs:output("\n Now deactivating bgp group " _ name _ " with peer-as " _ peer-as);
+		var $bgp_group_de-activate_configuration={
+						<configuration> {
+							<protocols>{
+								<bgp>	{
+								<group inactive="inactive">
+											{
+							 				<name> name;
+											}
+									}
+				 		   		    }
+		    						}
+					  		}
+		call jcs:load-configuration( $connection, $configuration = $bgp_group_de-activate_configuration);
+		
+	}
+
+	expr jcs:output("\n ===========> show isis database | match overload | match “XT|XL|BB|TL");
+
+/**************************************show isis database | match overload | match “XT|XL|BB|TL*******************************************/
+
+	var $Show_Version	=	<command> "show version";
+	var $O_Show_Version	=	jcs:invoke($Show_Version);
+	var $O_Router_name	=	$O_Show_Version/host-name;
+
+	
+	var $POP_String		=	jcs:split("\\.",$O_Router_name);
+	var $Act_POP		=	substring($POP_String[2],1,3);
+	
+	expr jcs:output($Act_POP);
+	
+		
+	var $isis_database=<command> "show isis database ";
+	var $O_isis_database = jcs:invoke($isis_database);
+	
+
+	var $isis_iter=($O_isis_database/rpc-reply/isis-database-information/isis-database[level==2]/isis-database-entry[ contains(lsp-attributes,"Overload")&&( starts-with(lsp-id,"XL")|| starts-with(lsp-id,"XT")|| starts-with(lsp-id,"BB")|| starts-with(lsp-id,"TL") )]);
+
+	if($isis_iter)
+	{
+		
+			for-each($isis_iter)
+			{
+				
+				var $LOOP_POP	=jcs:split("\\.",lsp-id);
+				var $A_LOOP_POP	=substring($LOOP_POP[2],1,3);
+				if($A_LOOP_POP==$Act_POP)
+				{
+					expr jcs:output("\n Overload router" _ lsp-id _ " is in the same POP");
+					expr test:Continue_Prompt_Function();
+				}
+			}
+		
+	}
+	
+
+
+
+	expr jcs:output("\n ===========> set protocols isis overload");
+
+/********************************************** set protocols isis overload **************************************************************/
+	var $isis_configuration={
+		<configuration> {
+			<protocols> {
+				<isis> {
+					<overload>;
+					}
+				    }
+				}
+		    }
+	
+
+	var $isis_time_configuration={
+		<configuration> {
+			<protocols> {
+				<isis> {
+					<overload>{
+							<timeout delete="delete">;
+						}
+					}
+				    }
+				}
+		    }
+			
+	call jcs:load-configuration( $connection, $configuration =$isis_time_configuration);	
+	call jcs:load-configuration( $connection, $configuration =$isis_configuration);
+
+	expr jcs:output("\n ===========> deactivate bgp protocols");
+	
+/********************************************** deactivate bgp protocols *****************************************************************/
+
+	var $bgp_de-activate_configuration={
+				<configuration> {
+					<protocols>{
+						<bgp inactive="inactive"> ;
+				 		   }
+		    				}
+					  }
+	
+
+		
+	call jcs:load-configuration( $connection, $configuration =$bgp_de-activate_configuration);
+
+
+	expr jcs:output("\n ===========> deactivate protocols");
+
+/********************************************** deactivate protocols *********************************************************************/
+
+	
+	var $protocols_deactivate_configuration={
+		<configuration> {
+			<protocols inactive="inactive"> ;
+		    }
+		}
+	
+
+		
+	call jcs:load-configuration( $connection, $configuration =$protocols_deactivate_configuration);
+
+
+}
+
+

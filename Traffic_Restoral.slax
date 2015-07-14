@@ -1,0 +1,143 @@
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns adv = "http://xml.juniper.net/adventure";
+ns func extension = "http://exslt.org/functions";
+ns test = "http://xml.juniper.net/test";
+ns exsl extension = "http://exslt.org/common";
+
+import "../import/junos.xsl";
+
+
+
+match / {
+
+expr jcs:output("===========> activate protocols");
+var $connection = jcs:open();
+/********************************************** activate protocols ***********************************************************************/
+	
+	var $protocols_activate_configuration={
+				<configuration> {
+					<protocols active="active">;
+		    				}
+					  }
+
+	call jcs:load-configuration( $connection, $configuration =$protocols_activate_configuration);
+	
+	expr jcs:output("===========> activate bgp");
+
+/********************************************** activate bgp *****************************************************************************/
+
+	var $bgp_activate_configuration={
+				<configuration> {
+					<protocols >{
+							<bgp active="active">;
+							}
+		    				}
+					  }
+	
+
+		
+	call jcs:load-configuration( $connection, $configuration =$bgp_activate_configuration);
+
+	expr jcs:output("===========> delete protocols isis overload");
+
+/********************************************** delete protocols isis overload ***********************************************************/
+
+		
+	var $isis_delete_configuration={
+		<configuration> {
+			<protocols> {
+				<isis delete="delete"> {
+					<overload delete="delete">;
+					}
+				    }
+				}
+		    }
+	call jcs:load-configuration( $connection, $configuration =$isis_delete_configuration);
+
+	expr jcs:output("===========> set protocols isis overload timeout 600");
+
+/********************************************** set protocols isis overload timeout 600  *************************************************/
+
+	var $isis_time_reset_configuration={
+		<configuration> {
+			<protocols> {
+				<isis> {
+					<overload>{
+							<timeout> 600;
+						}
+					}
+				    }
+				}
+		    }
+
+	call jcs:load-configuration( $connection, $configuration =$isis_time_reset_configuration);
+
+
+	expr jcs:output("===========> activate group <GROUP_NAME>");
+
+/********************************************** activate group <GROUP_NAME>  *************************************************/
+
+	var $Restore_Bgp_Config=<get-configuration>;
+	var $O_Restore_Bgp_Config 	= jcs:invoke($Restore_Bgp_Config);
+	var $Restoral_xml_file		= jcs:get-input("\n Please enter the xml file name with path of the configuration file "); 
+	var $O_Bgp_Config		= document($Restoral_xml_file);
+
+for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")||starts-with(peer-as,"65")||starts-with(peer-as,"61")||starts-with(peer-as,"62"))])
+	{
+		
+		var $Temp_bgp_grp=./name;	
+		if(not($O_Bgp_Config/protocols/bgp/group[(@inactive)&&(name==$Temp_bgp_grp)]))
+		{
+			expr jcs:output("\n Now activating bgp group " _ name _ " with peer-as " _ peer-as);
+			var $bgp_group_activate_configuration={
+						<configuration> {
+							<protocols>{
+								<bgp>	{
+								<group active="active">
+											{
+							 				<name> name;
+											}
+									}
+				 		   		    }
+		    						}
+					  		}
+		call jcs:load-configuration( $connection, $configuration = $bgp_group_activate_configuration);
+		}
+
+
+
+
+	}
+	
+	var $close-results = jcs:close($connection);
+
+
+
+
+
+
+}
+<func:function name="test:Continue_Prompt_Function">
+{
+	var $var = jcs:get-input( "Do you want to continue (yes/no) ? " );
+	if($var=="no")     
+	{ 
+	  		<xsl:message terminate="yes"> "Aborting the script";
+	} 
+	else
+	{
+		if($var!="yes")
+		{
+		
+			<xsl:message> "Please choose between 'yes' or 'no'.\n";
+			expr test:Continue_Prompt_Function();
+				
+			
+		}
+	}
+	
+}
+

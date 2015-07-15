@@ -92,10 +92,11 @@ var $connection = jcs:open();
 for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")||starts-with(peer-as,"65")||starts-with(peer-as,"61")||starts-with(peer-as,"62"))])
 	{
 		
-		var $Temp_bgp_grp=./name;
+		var $Temp_bgp_grp = name;
 			
-			
-		if(not($O_Bgp_Config/protocols/bgp/group[(@inactive)&&(name==$Temp_bgp_grp)]))
+		if($O_Bgp_Config/configuration/protocols/bgp/group[(name==$Temp_bgp_grp)])
+		{	
+			if(not($O_Bgp_Config/configuration/protocols/bgp/group[(@inactive)]))
 			{
 				expr jcs:output("\n Now activating bgp group " _ name _ " with peer-as " _ peer-as);
 				var $bgp_group_activate_configuration={
@@ -113,7 +114,7 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")
 			call jcs:load-configuration( $connection, $configuration = $bgp_group_activate_configuration);
 			}
 	
-
+		}
 
 
 

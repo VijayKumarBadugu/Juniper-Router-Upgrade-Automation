@@ -56,7 +56,7 @@ match / {
 
 
 
-/**************************************Transferring the config file to TFTP server FTP****************************************************/
+/**************************************Transferring the config file to FTP server FTP****************************************************/
 
 	
 	expr test:FTP_File_Transfer("/var/home/full/" _ $File_name,$File_name);
@@ -66,7 +66,7 @@ match / {
 							}
 	var $O_Config_File_Checksum	= jcs:invoke($Config_File_Checksum);
 	expr jcs:output("\n The md5 checksum of the file is " _ $O_Config_File_Checksum/file-checksum/checksum);
-	expr jcs:output("\n Please check whether the md5 matches to the md5 of the file in the TFTP server ");
+	expr jcs:output("\n Please check whether the md5 matches to the md5 of the file in the FTP server ");
 	expr test:Continue_Prompt_Function();
 
 
@@ -162,7 +162,7 @@ match / {
 							}
 	var $O_Image_Config_File_Checksum	= jcs:invoke($Image_Config_File_Checksum);
 	expr jcs:output("\n The md5 checksum of the file is " _ $O_Image_Config_File_Checksum/file-checksum/checksum);
-	expr jcs:output("\n Please check whether the md5 matches to the md5 of the file in the TFTP server ");
+	expr jcs:output("\n Please check whether the md5 matches to the md5 of the file in the FTP server ");
 	expr test:Continue_Prompt_Function();
 	expr jcs:output("Checked Started" _ $Image_File_Path);
 	if($junos-context/routing-engine-name=="re0")
@@ -260,6 +260,8 @@ in the bootlist  ");
 	expr jcs:output("\n Please use following command to upgrade routing engines");
 	expr jcs:output("\n request system software add " _ $Image_File_Path);
 	expr jcs:output("\n request system reboot media compact-flash"); 
+	expr jcs:output("\n The xml configuration file is stored at /var/home/full//" _ $File_name _ ".xml");
+	expr jcs:output("\n Please use Traffic_Restoral.slax to restore the traffic");
 
 	
 	
@@ -356,7 +358,7 @@ in the bootlist  ");
 
 <func:function name="test:FTP_Config_Path_Finder">
 {
-	var $FTP_Config_option	= jcs:get-input("\n Is the file at /prod/img directory at TFTP server ");
+	var $FTP_Config_option	= jcs:get-input("\n Is the file at /prod/img directory at FTP server ");
 	if($FTP_Config_option=="yes")
 	{
 		var $FTP_Config_path= "/prod/img/";
@@ -552,7 +554,7 @@ in the bootlist  ");
 /*<func:function name="test:Traffic_Removal_Function">*/
 template Traffic_Removal_Function()
 {
-	expr jcs:output("\n\n Hello! Welcome to Automated MOP \n");
+	expr jcs:output("\n\n Hello! Welcome to Traffic Removal MOP \n");
 	expr jcs:output("\n\n Checking for whether the router is connected to VOIP equipment .\n ");
 	expr test:Continue_Prompt_Function();
 

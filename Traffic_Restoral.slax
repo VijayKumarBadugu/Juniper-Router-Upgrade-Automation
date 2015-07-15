@@ -1,3 +1,7 @@
+/*
+$Id$
+*/
+
 version 1.0;
 ns junos = "http://xml.juniper.net/junos/*/junos";
 ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
@@ -82,17 +86,19 @@ var $connection = jcs:open();
 
 	var $Restore_Bgp_Config=<get-configuration>;
 	var $O_Restore_Bgp_Config 	= jcs:invoke($Restore_Bgp_Config);
-	var $Restoral_xml_file		= jcs:get-input("\n Please enter the xml file name with path of the configuration file "); 
+	var $Restoral_xml_file		= test:Restoral_File_Finder(); 
 	var $O_Bgp_Config		= document($Restoral_xml_file);
 
 for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")||starts-with(peer-as,"65")||starts-with(peer-as,"61")||starts-with(peer-as,"62"))])
 	{
 		
-		var $Temp_bgp_grp=./name;	
+		var $Temp_bgp_grp=./name;
+			
+			
 		if(not($O_Bgp_Config/protocols/bgp/group[(@inactive)&&(name==$Temp_bgp_grp)]))
-		{
-			expr jcs:output("\n Now activating bgp group " _ name _ " with peer-as " _ peer-as);
-			var $bgp_group_activate_configuration={
+			{
+				expr jcs:output("\n Now activating bgp group " _ name _ " with peer-as " _ peer-as);
+				var $bgp_group_activate_configuration={
 						<configuration> {
 							<protocols>{
 								<bgp>	{
@@ -104,8 +110,10 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")
 				 		   		    }
 		    						}
 					  		}
-		call jcs:load-configuration( $connection, $configuration = $bgp_group_activate_configuration);
-		}
+			call jcs:load-configuration( $connection, $configuration = $bgp_group_activate_configuration);
+			}
+	
+
 
 
 
@@ -120,6 +128,44 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")
 
 
 }
+
+<func:function name="test:Restoral_File_Finder">
+{
+	var $Option	= jcs:get-input("\n Is the file present in local disk ? ");
+	if($Option=="yes")
+	{
+		var $Restoral_xml_file		= jcs:get-input("\n Please enter the xml file name with path of the xml configuration file "); 
+		<func:result select="$Restoral_xml_file">;
+	}
+	else
+	{
+		if($Option=="no")
+		{
+			var $Restoral_xml_file		= test:XML_Path_Finder();
+			<func:result select="$Restoral_xml_file">;
+		}
+		else
+		{
+			var $Restoral_xml_file		= test:Restoral_File_Finder();
+			<func:result select="$Restoral_xml_file">;	
+		}
+	}
+
+}
+
+
+<func:function name="test:XML_Path_Finder">
+{
+	
+		var $Source_File		=jcs:get-input("\n Please enter the xml file name ");/*"jinstall64-13.3R3-S8.2-domestic-signed.tgz";*/
+		expr jcs:output("\n Downloading the xml file " _ $Source_File);
+		var $Destination_File	="/var/home/full/" _ $Source_File;	
+		var $Success_Destination_File = test:FTP_File_Transfer_Software($Source_File,$Destination_File);	
+		<func:result select="$Success_Destination_File">;
+	
+
+}
+
 <func:function name="test:Continue_Prompt_Function">
 {
 	var $var = jcs:get-input( "Do you want to continue (yes/no) ? " );
@@ -139,5 +185,68 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")
 		}
 	}
 	
+}
+
+
+
+<func:function name="test:FTP_File_Transfer_Software">
+{
+	param $Source_File;
+	param $Destination_File;
+	var $FTP_IP 		= jcs:get-input("\n Please enter the IP address of the FTP server " );
+	var $FTP_Hostname	= jcs:get-input("\n Please enter user name of the FTP server " );
+	var $Password		= jcs:get-secret("\n Please enter the password ");
+	
+	var $FTP_Config_path	= test:FTP_Config_Path_Finder();
+	
+	var $Temp		="ftp://" _ $FTP_Hostname _ ":" _ $Password _ "@" _ $FTP_IP _ $FTP_Config_path _  $Source_File;
+
+	var $file-copy-xml-rpc = <file-copy> {
+     			 	<source> $Temp;
+      				<destination> $Destination_File;
+						
+    						}
+	expr jcs:output("\n Source file :" _ $Temp);
+	expr jcs:output("\n Destination file : " _ $Destination_File);
+	var $results-xml = jcs:invoke($file-copy-xml-rpc);
+	if ($results-xml//self::xnm:error)
+	{
+		expr jcs:output($results-xml);
+		expr jcs:output("\n File transer failed ! Please try again ");
+		var $Success_Destination_File = test:XML_Path_Finder();
+		<func:result select="$Success_Destination_File">;
+	}
+	else
+	{
+		expr jcs:output("\n File transfered successfully ! ");
+		<func:result select="$Destination_File">;
+	}
+	
+}
+
+
+
+
+<func:function name="test:FTP_Config_Path_Finder">
+{
+	var $FTP_Config_option	= jcs:get-input("\n Is the file at /prod/img directory at TFTP server ");
+	if($FTP_Config_option=="yes")
+	{
+		var $FTP_Config_path= "/prod/img/";
+		<func:result select="$FTP_Config_path">;
+	}
+	else
+	{
+		if($FTP_Config_option=="no")
+		{
+			var $FTP_Config_path=jcs:get-input("\n please give the path from root ");
+			<func:result select="$FTP_Config_path">;
+		}
+		else
+		{
+			var $FTP_Config_path	= test:FTP_Config_Path_Finder();
+			<func:result select="$FTP_Config_path">;
+		}
+	}
 }
 

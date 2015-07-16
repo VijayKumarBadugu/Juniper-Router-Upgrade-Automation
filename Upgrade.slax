@@ -2,7 +2,6 @@
 $Id$
 */
 
-
 version 1.0;
 ns junos = "http://xml.juniper.net/junos/*/junos";
 ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
@@ -15,24 +14,13 @@ ns exsl extension = "http://exslt.org/common";
 import "../import/junos.xsl";
 match / {
 	
-		
-/****************************Saving configuration file at /var/home/full/*************************************************************/
-
 	expr jcs:output("\n \n Welcome to Router Upgradation MOP ");
 	expr jcs:output("\n This script removes the traffic and sets the router in overload ");
 	expr test:Continue_Prompt_Function();
-
-
-	var $regex 		= "([[:digit:]]*)-([[:digit:]]*)-([[:digit:]]*) ([0-9]*):([0-9]*):([0-9]*).*";
-	var $result 		= jcs:regex($regex, $localtime-iso );
-	var $Router_Name 	= <command> "show version";
-	var $O_Router_Name 	= jcs:invoke($Router_Name);
-	var $Actual_Router_Name	= $O_Router_Name/host-name;
-	var $File_name		= $Actual_Router_Name _ "." _ $result[3] _ $result[4] _ substring($result[2],3,4);
+	expr test:View_System_Running();
+	var $File_name		= test:File_Name_Creater();
 
 	expr jcs:output("\n Saving the router configuration at /var/home/full/" _ $File_name);
-
-
 	var $Save_Configuration 	= <get-configuration format="text"> ;
 	var $O_Save_Configuration 	= jcs:invoke( $Save_Configuration);
 	var $writing = <file-put> {
@@ -45,7 +33,7 @@ match / {
 
 	var $result-writing 		= jcs:invoke( $writing );
 
-	if($result-writing//self::xnm:error)
+	if($result-writing//self::xnm:error || $result-writing//self::xnm:warning)
 	{
 		expr jcs:output($result-writing);
 		expr jcs:output("\n File transfer failed !.Please exit the script and check if the path /var/home/full/ is valid ");
@@ -53,7 +41,10 @@ match / {
 	
 	}
 
-
+/**************************************Saving the config at backup routing engine ****************************************************/
+	
+	expr jcs:output("\n Transfering the configuration to back up routing engine");	
+	expr test:Routing_Engine_File_Transfer("/var/home/full/" _ $File_name,test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_name);
 
 
 /**************************************Transferring the config file to FTP server FTP****************************************************/
@@ -69,110 +60,14 @@ match / {
 	expr jcs:output("\n Please check whether the md5 matches to the md5 of the file in the FTP server ");
 	expr test:Continue_Prompt_Function();
 
-
-
 /**************************Searching for the install file and dowloading from back up if not present*************************************/
 /****************************************************************************************************************************************/
+	expr test:View_System_Running();
 
-	var $Code_path_file		= "/var/home/full/";
-	expr jcs:output("\n Searching for code file if exists on router at " _ $Code_path_file);
-	var $File_Search		=  <file-list>{
-			
-			<path> $Code_path_file;
-					}
-	var $O_File_Search		= jcs:invoke($File_Search);
-	
+	var $Image_File_Path 		= test:Search_Image_File();
+	expr jcs:output("\n The Final file is " _ 	$Image_File_Path);
 
-	if($O_File_Search/directory/file-information[starts-with(file-name,"jinstall")])
-	{
-		expr jcs:output("\n File exists in " _ $Code_path_file);
-	}
-	else
-	{
 
-		if($junos-context/routing-engine-name=="re0")
-		{
-			var $Other_Code_path_file		= "re1:/var/home/full/";
-			var $Other_File_Search	=  <file-list>{
-							<path> $Other_Code_path_file;
-								}
-			var $Other_O_File_Search		= jcs:invoke($Other_File_Search);
-
-			var $Search_Variable			= $Other_O_File_Search/multi-routing-engine-item/directory-list;
-			
-			if($Search_Variable/directory/file-information[starts-with(file-name,"jinstall")])
-			{
-				
-				expr jcs:output("\n File present in other routing engine ");
-				
-
-				var $Source_File = $Other_Code_path_file _ $Search_Variable/directory/file-information[starts-with(file-name,"jinstall")]/file-name;
-				var $Destination_File= $Code_path_file _ $Search_Variable/directory/file-information[starts-with(file-name,"jinstall")]/file-name;
-				
-				expr test:Routing_Engine_File_Transfer($Source_File,$Destination_File);
-				expr jcs:output("\n File downloaded from routing engine re1 !");
-			}
-			else
-			{
-				expr jcs:output("\n File not present in other routing engine re1 ! ");
-				expr test:Continue_Prompt_Function();
-			}
-		}
-		else
-		{
-			var $Other_Code_path_file		= "re0:/var/home/full/";
-			var $Other_File_Search	=  <file-list>{
-							<path> $Other_Code_path_file;
-								}
-			var $Other_O_File_Search		= jcs:invoke($Other_File_Search);
-			
-			var $Search_Variable			= $Other_O_File_Search/multi-routing-engine-item/directory-list;
-			
-			if($Search_Variable/directory/file-information[starts-with(file-name,"jinstall")])
-			{
-				
-				expr jcs:output("\n File present in othe routing engine ");
-				
-
-				var $Source_File = $Other_Code_path_file _ $Search_Variable/directory/file-information[starts-with(file-name,"jinstall")]/file-name;
-				var $Destination_File= $Code_path_file _ $Search_Variable/directory/file-information[starts-with(file-name,"jinstall")]/file-name;
-				
-				expr test:Routing_Engine_File_Transfer($Source_File,$Destination_File);
-				expr jcs:output("\n File downloaded from routing engine re0 !");
-			}
-			else
-			{
-				expr jcs:output("\n File not present in other routing engine re0 ! ");
-				expr test:Continue_Prompt_Function();
-			}
-			
-		
-		}
-	}
-	
-
-/*****************************************************************************************************************************************/
-/*****************************************Downloading the image file from FTP server******************************************************/
-
-	var $Image_File_Path	= test:Bit_Finder();
-	expr jcs:output("\n The image file is saved at " _ $Image_File_Path);
-	
-	var $Image_Config_File_Checksum	= <get-checksum-information>{
-					<path> $Image_File_Path;
-							}
-	var $O_Image_Config_File_Checksum	= jcs:invoke($Image_Config_File_Checksum);
-	expr jcs:output("\n The md5 checksum of the file is " _ $O_Image_Config_File_Checksum/file-checksum/checksum);
-	expr jcs:output("\n Please check whether the md5 matches to the md5 of the file in the FTP server ");
-	expr test:Continue_Prompt_Function();
-	expr jcs:output("Checked Started" _ $Image_File_Path);
-	if($junos-context/routing-engine-name=="re0")
-	{
-		expr test:Routing_Engine_File_Transfer($Image_File_Path,"re1:" _ $Image_File_Path);
-	}
-	else
-	{
-		expr test:Routing_Engine_File_Transfer($Image_File_Path,"re0:" _ $Image_File_Path);
-	}
 
 /***********************************************show system storage***********************************************************************/
 
@@ -216,12 +111,11 @@ in the bootlist  ");
             					
 	}
 
+
 /********************************************************* Traffic maintenence************************************************************/
 
 	expr test:Configuration_Xml_Saved($File_name _ ".xml");
 	call Traffic_Removal_Function();
-	/*expr test:Traffic_Removal_Function();*/
-
 
 /*********************************************************request system snapshot*********************************************************/
 
@@ -266,29 +160,29 @@ in the bootlist  ");
 	
 	
 	
+
 }
 
-
-<func:function name="test:Routing_Engine_Membership">
+<func:function name="test:View_System_Running">
 {
-	
-	var $Routing_Engine_Switch	= <command> "request chassis routing-engine master switch";
-	var $O_Routing_Engine_Switch	= jcs:invoke($Routing_Engine_Switch);
-	expr jcs:output($O_Routing_Engine_Switch);
-
-	var $Routing_Engine_Checker	= <command> " show chassis routing-engine ";
-	var $O_Routing_Engine_Checker	= jcs:invoke($Routing_Engine_Checker);
-	
-	if($O_Routing_Engine_Checker/route-engine[(slot=="0")&&(mastership-state=="master")])
+	var $Option	=jcs:get-input("\n Do you want to view system status ? ");
+	if($Option=="yes")
 	{
-		expr jcs:output("\n Re0 is Configured as Master. Good to go ");	
+		var $Command = jcs:get-input("\n Please enter the command ");
+		var $Show_Command = <command> $Command;
+		var $O_Show_Command =  jcs:invoke($Show_Command);
+		expr jcs:output($O_Show_Command);
+		expr test:View_System_Running();
+		
 	}
 	else
 	{
-		expr jcs:output("\n Re0 is not configured as Master! ");
-		expr test:Routing_Engine_Membership();
+		if($Option!="no")
+		{
+			expr test:View_System_Running();
+		}
+		
 	}
-
 }
 
 
@@ -322,98 +216,190 @@ in the bootlist  ");
 	}
 
 	
-	expr test:FTP_File_Transfer("\n /var/home/full/" _ $File_Name_Xml,$File_Name_Xml);
+	expr test:FTP_File_Transfer("/var/home/full/" _ $File_Name_Xml,$File_Name_Xml);
+	expr test:Routing_Engine_File_Transfer("/var/home/full/" _ $File_Name_Xml,test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_Name_Xml);
 }
 
 
 
-
-
-
-
-
-
-
-
-<func:function name="test:Software_Add_Routing_Engine">
+<func:function name="test:File_Finder">
 {
-		param $Image_File_Path;
-		param $Routing_Engine_Number;
-		var $Upgrade_file_add	= <command> "request system software add " _ $Image_File_Path _ " reboot " _ $Routing_Engine_Number;
+	param $File_name;
+	var $Code_path_file		= "/var/home/full/";
+	expr jcs:output("\n Searching for code file if exists on router at " _ $Code_path_file);
+	var $File_Search		=  <file-list>{			
+						<path> $Code_path_file;
+					}
+	var $O_File_Search		= jcs:invoke($File_Search);
+	
 
-		var $O_Upgrade_file_add	= jcs:invoke($Upgrade_file_add);
-
-		if($O_Upgrade_file_add//self::xnm:error || $O_Upgrade_file_add//self::xnm:warning)
-		{
-			expr jcs:output("\n Error in loading the file! ");
-		}
-		else
-		{
-			expr jcs:output("\n File loaded successfully! ");
-		}
-
-}
-
-
-
-<func:function name="test:FTP_Config_Path_Finder">
-{
-	var $FTP_Config_option	= jcs:get-input("\n Is the file at /prod/img directory at FTP server ");
-	if($FTP_Config_option=="yes")
+	if($O_File_Search/directory/file-information[file-name==$File_name])
 	{
-		var $FTP_Config_path= "/prod/img/";
-		<func:result select="$FTP_Config_path">;
+		var $Result="yes";
+		<func:result select="$Result">;
 	}
 	else
 	{
-		if($FTP_Config_option=="no")
+		var $Result="no";
+		<func:result select="$Result">;
+	}
+}
+
+
+<func:function name="test:Search_Image_File">
+{
+	var $Code_path_file		= "/var/home/full/";
+	expr jcs:output("\n Searching for code file if exists on router at " _ $Code_path_file);
+	var $File_Search		=  <file-list>{			
+						<path> $Code_path_file;
+					}
+	var $O_File_Search		= jcs:invoke($File_Search);
+	
+
+	if($O_File_Search/directory/file-information[starts-with(file-name,"jinstall") && contains(file-name,".tgz")])
+	{
+		expr jcs:output("\n Software Image files are present ! Please choose the required Image file \n\n");
+		
+		for-each($O_File_Search/directory/file-information[starts-with(file-name,"jinstall") && contains(file-name,".tgz")])
 		{
-			var $FTP_Config_path=jcs:get-input("\n please give the path from root ");
-			<func:result select="$FTP_Config_path">;
+			expr jcs:output("\n " _ file-name);
+		}
+		
+		var $Image_Option = jcs:get-input("\n Did you find the required Image file? ");
+		
+		if($Image_Option=="yes")
+		{
+			var $Image_File	= jcs:get-input("\n Please give the image file name ?");
+			if($O_File_Search/directory/file-information[file-name==$Image_File])
+			{
+				expr jcs:output("\n Checking the Image file whether it is present in the backup routing engine");
+				var $Source_File 	= "/var/home/full/" _ $Image_File;
+				if(test:File_Finder() == "no")
+				{
+					
+					var $Destination_File	= test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $Image_File;
+					expr test:Routing_Engine_File_Transfer($Source_File,$Destination_File);
+				}
+				
+				<func:result select="$Source_File">;
+				
+				
+			}
+			else
+			{
+				expr jcs:output("\n You choose a file that is not present .");
+				expr test:Quit_Prompt_Function();
+				expr jcs:output("\n Please retry");
+				var $Image_File_Path 	=  test:Search_Image_File();
+				<func:result select="$Image_File_Path">;
+				
+			}
+			
 		}
 		else
 		{
-			var $FTP_Config_path	= test:FTP_Config_Path_Finder();
-			<func:result select="$FTP_Config_path">;
+			if($Image_Option=="no")
+			{
+				expr jcs:output("\n Searching for image file in back up routing engine");
+				var $Image_File_Path 	=   test:Image_File_Search_Backup();
+				<func:result select="$Image_File_Path">;
+			}
+			else
+			{
+				expr jcs:output("\n Please retry");
+				var $Image_File_Path 	=   test:Search_Image_File();
+				<func:result select="$Image_File_Path">;	
+			}
+
 		}
-	}
-}
-
-<func:function name="test:FTP_File_Transfer_Software">
-{
-	param $Source_File;
-	param $Destination_File;
-	var $FTP_IP 		= jcs:get-input("\n Please enter the IP address of the FTP server " );
-	var $FTP_Hostname	= jcs:get-input("\n Please enter user name of the FTP server " );
-	var $Password		= jcs:get-secret("\n Please enter the password ");
-	
-	var $FTP_Config_path	= test:FTP_Config_Path_Finder();
-	
-	var $Temp		="ftp://" _ $FTP_Hostname _ ":" _ $Password _ "@" _ $FTP_IP _ $FTP_Config_path _  $Source_File;
-
-	var $file-copy-xml-rpc = <file-copy> {
-     			 	<source> $Temp;
-      				<destination> $Destination_File;
-						
-    						}
-	expr jcs:output("\n Source file :" _ $Temp);
-	expr jcs:output("\n Destination file : " _ $Destination_File);
-	var $results-xml = jcs:invoke($file-copy-xml-rpc);
-	if ($results-xml//self::xnm:error)
-	{
-		expr jcs:output($results-xml);
-		expr jcs:output("\n File transer failed ! Please try again ");
-		var $Success_Destination_File = test:Bit_Finder();
-		<func:result select="$Success_Destination_File">;
+		
+		
+		
+		
 	}
 	else
 	{
-		expr jcs:output("\n File transfered successfully ! ");
-		<func:result select="$Destination_File">;
+		
+		expr jcs:output("\n Searching for image file in back up routing engine");
+		var $Image_File_Path 	=   test:Image_File_Search_Backup();
+		<func:result select="$Image_File_Path">;
+		
+			
+		
+		
 	}
-	
+
 }
 
+
+
+<func:function name="test:Image_File_Search_Backup">
+{
+	var $Code_path_file		= test:Other_Routing_Engine_Finder() _ ":/var/home/full/";
+	expr jcs:output("\n Searching for code file if exists on router at " _ $Code_path_file);
+	var $File_Search		=  <file-list>{			
+						<path> $Code_path_file;
+					}
+	var $O_File_Search		= jcs:invoke($File_Search);
+	
+
+	
+if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-information[starts-with(file-name,"jinstall") && contains(file-name,".tgz")])
+	{
+		expr jcs:output("\n Software Image files are present ! Please choose the required Image file \n\n");
+		
+	for-each($O_File_Search/multi-routing-engine-item/directory-list/directory/file-information[starts-with(file-name,"jinstall") && contains(file-name,".tgz")])
+		{
+			expr jcs:output("\n " _ file-name);
+		}
+		
+		var $Image_Option = jcs:get-input("\n Did you find the required Image file? ");
+		
+		if($Image_Option=="yes")
+		{
+			var $Image_File	= jcs:get-input("\n Please give the image file name ?");
+			if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-information[file-name==$Image_File])
+			{
+				
+					var $Source_File 	= test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $Image_File;
+					var $Destination_File	= "/var/home/full/" _ $Image_File;
+					expr test:Routing_Engine_File_Transfer($Source_File,$Destination_File);
+					<func:result select="$Destination_File">;
+				
+				
+			}
+			else
+			{
+				expr jcs:output("\n You choose a file that is not present .");
+				expr test:Quit_Prompt_Function();
+				var $Image_File_Path 	=   test:Image_File_Search_Backup();
+				<func:result select="$Image_File_Path">;
+			}
+			
+		}
+		else
+		{
+			expr jcs:output("\n You don't have the required Image file in both of the routing engines !");
+			expr jcs:output("\n Do you still want to continue with the maintenance ");
+			expr test:Quit_Prompt_Function();
+				
+		}
+		
+		
+		
+		
+	}
+	else
+	{
+		
+		expr jcs:output("\n You don't have the required Image file in both of the routing engines !");
+		expr jcs:output("\n Do you still want to continue with the maintenance ");
+		expr test:Quit_Prompt_Function();
+		
+		
+	}
+
+}
 
 
 <func:function name="test:FTP_File_Transfer">
@@ -448,6 +434,54 @@ in the bootlist  ");
 }
 
 
+<func:function name="test:FTP_Config_Path_Finder">
+{
+	var $FTP_Config_option	= jcs:get-input("\n Is the file at /prod/img directory at FTP server ");
+	if($FTP_Config_option=="yes")
+	{
+		var $FTP_Config_path= "/prod/img/";
+		<func:result select="$FTP_Config_path">;
+	}
+	else
+	{
+		if($FTP_Config_option=="no")
+		{
+			var $FTP_Config_path=jcs:get-input("\n please give the path from root ");
+			<func:result select="$FTP_Config_path">;
+		}
+		else
+		{
+			var $FTP_Config_path	= test:FTP_Config_Path_Finder();
+			<func:result select="$FTP_Config_path">;
+		}
+	}
+}
+
+
+<func:function name="test:Other_Routing_Engine_Finder">
+{
+	if($junos-context/routing-engine-name=="re0")
+	{
+		var $Routing_Engine ="re1";
+		<func:result select="$Routing_Engine">;
+	}
+	else
+	{
+		if($junos-context/routing-engine-name=="re1")
+		{
+			var $Routing_Engine ="re0";
+			<func:result select="$Routing_Engine">;
+		}
+		else
+		{
+			expr jcs:output("\n Routing engine is not configured. Please quit and debug.");
+			expr test:Quit_Prompt_Function();
+			
+		}
+	}
+}
+
+
 <func:function name="test:Routing_Engine_File_Transfer">
 {
 	param $Source_File;
@@ -464,7 +498,7 @@ in the bootlist  ");
 	if ($results-xml//self::xnm:error)
 	{
 		expr jcs:output($results-xml);
-		expr jcs:output("\nFile transer failed ! Please quit anc check connections ");
+		expr jcs:output("\nFile transer failed between routing engines ! Please quit and check connections ");
 		expr test:Continue_Prompt_Function();
 	}
 	else
@@ -499,8 +533,18 @@ in the bootlist  ");
 	
 }
 
+<func:function name="test:File_Name_Creater">
+{
 
-
+	var $regex 		= "([[:digit:]]*)-([[:digit:]]*)-([[:digit:]]*) ([0-9]*):([0-9]*):([0-9]*).*";
+	var $result 		= jcs:regex($regex, $localtime-iso );
+	var $Router_Name 	= <command> "show version";
+	var $O_Router_Name 	= jcs:invoke($Router_Name);
+	var $Actual_Router_Name	= $O_Router_Name/host-name;
+	var $File_name		= $Actual_Router_Name _ "." _ $result[3] _ $result[4] _ substring($result[2],3,4);
+	<func:result select="$File_name">;
+}
+	
 
 
 <func:function name="test:Quit_Prompt_Function">
@@ -524,34 +568,6 @@ in the bootlist  ");
 	
 }
 
-
-<func:function name="test:Bit_Finder">
-{
-	var $Find_bit	=  <get-chassis-inventory>;
-	var $O_Find_bit = jcs:invoke($Find_bit);
-
-	var $Path_Find_bit = $O_Find_bit/chassis/chassis-module[contains(name,"Engine")]/model-number;
-
-	if( ($Path_Find_bit=="RE-S-1800x2-8G") || ($Path_Find_bit=="RE-S-1800x2-16G") || ($Path_Find_bit=="RE-S-1800x4-8G") || ($Path_Find_bit==RE-S-1800x4-16G))
-	{
-		var $Source_File		=jcs:get-input("\n Please enter the image file name ");/*"jinstall64-13.3R3-S8.2-domestic-signed.tgz";*/
-		expr jcs:output("\n Downloading the 64 bit image file " _ $Source_File);
-		var $Destination_File	="/var/home/full/" _ $Source_File;	
-		var $Success_Destination_File = test:FTP_File_Transfer_Software($Source_File,$Destination_File);	
-		<func:result select="$Success_Destination_File">;
-	}
-	else
-	{
-		var $Source_File		= jcs:get-input("\n Please enter the image file name ");/*"jinstall-13.3R3-S8.2-domestic-signed.tgz";*/
-		expr jcs:output("\n Downloading the 32 bit image file " _ $Source_File);
-		var $Destination_File	="/var/home/full/" _ $Source_File;
-		var $Success_Destination_File = test:FTP_File_Transfer_Software($Source_File,$Destination_File);	
-		<func:result select="$Success_Destination_File">;
-	}
-
-}
-
-/*<func:function name="test:Traffic_Removal_Function">*/
 template Traffic_Removal_Function()
 {
 	expr jcs:output("\n\n Hello! Welcome to Traffic Removal MOP \n");
@@ -828,7 +844,50 @@ template Traffic_Removal_Function()
 		
 	call jcs:load-configuration( $connection, $configuration =$protocols_deactivate_configuration);
 
+	expr jcs:output("\n ===========> deactivate routing-options");
+
+/********************************************** deactivate routing-options *********************************************************************/
+	
+	var $routing_options_deactivate =	{
+					<configuration>{
+            					<routing-options inactive="inactive">;
+						}
+						}
+	call jcs:load-configuration( $connection, $configuration =$routing_options_deactivate);
+
+
+	
+	expr jcs:output("\n ===========> deactivate chassis redundancy");
+
+/********************************************** deactivate chassis redundancy *********************************************************************/
+
+
+	var $chassis_redundancy_deactivate =	{
+				<configuration> 	{
+						<chassis>	{
+                		<redundancy inactive="inactive">;
+								}
+							}
+						}
+	call jcs:load-configuration( $connection, $configuration =$chassis_redundancy_deactivate);
+
+
+	expr jcs:output("\n ===========> deactivate routing-instances");
+
+/********************************************** deactivate routing-instances *********************************************************************/
+
+	var $Routing-Instances		= <get-configuration>;
+	var $O_Routing-Instances	= jcs:invoke($Routing-Instances);
+	if($O_Routing-Instances/routing-instances)
+	{
+		var $routing_instance_deactivate =	{
+					<configuration>{
+            					<routing-instances inactive="inactive">;
+						}
+						}
+	call jcs:load-configuration( $connection, $configuration =$routing_instance_deactivate);
+		
+	}
 
 }
-
 

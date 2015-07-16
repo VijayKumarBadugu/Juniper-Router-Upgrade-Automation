@@ -17,8 +17,61 @@ import "../import/junos.xsl";
 
 match / {
 
-expr jcs:output("===========> activate protocols");
-var $connection = jcs:open();
+
+	var $connection = jcs:open();
+
+	var $File_name		= "/var/home/full/" _ test:File_Name_Creater() _ ".xml";
+	
+	var $Restoral_xml_file		= $File_name ;
+	var $O_Bgp_Config		= document($Restoral_xml_file);
+
+	expr jcs:output("===========> activate routing-instances");
+	
+/********************************************** activate routing-instances *********************************************************************/
+
+	
+	if($O_Bgp_Config/configuration/routing-instances)
+	{
+		var $routing_instance_activate =	{
+					<configuration>{
+            					<routing-instances active="active">;
+						}
+						}
+	call jcs:load-configuration( $connection, $configuration =$routing_instance_activate);
+		
+	}
+
+
+	expr jcs:output("===========> activate routing-options");
+
+/********************************************** activate routing-options *********************************************************************/
+	
+	var $routing_options_activate =	{
+					<configuration>{
+            					<routing-options active="active">;
+						}
+						}
+	call jcs:load-configuration( $connection, $configuration =$routing_options_activate);
+
+
+	
+	
+
+	expr jcs:output("===========> activate chassis redundancy");
+
+/********************************************** activate chassis redundancy ***********************************************************************/
+
+	var $chassis_redundancy_activate =	 	{
+						<configuration>{
+							<chassis>	{
+                				<redundancy active="active">;
+									}
+								}
+							}
+	call jcs:load-configuration( $connection, $configuration =$chassis_redundancy_activate);
+	
+	expr jcs:output("===========> activate protocols");
+
 /********************************************** activate protocols ***********************************************************************/
 	
 	var $protocols_activate_configuration={
@@ -86,8 +139,7 @@ var $connection = jcs:open();
 
 	var $Restore_Bgp_Config=<get-configuration>;
 	var $O_Restore_Bgp_Config 	= jcs:invoke($Restore_Bgp_Config);
-	var $Restoral_xml_file		= test:Restoral_File_Finder(); 
-	var $O_Bgp_Config		= document($Restoral_xml_file);
+	
 
 for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")||starts-with(peer-as,"65")||starts-with(peer-as,"61")||starts-with(peer-as,"62"))])
 	{
@@ -120,6 +172,9 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")
 
 
 	}
+
+
+
 	
 	var $close-results = jcs:close($connection);
 
@@ -129,6 +184,20 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")
 
 
 }
+
+<func:function name="test:File_Name_Creater">
+{
+
+	var $regex 		= "([[:digit:]]*)-([[:digit:]]*)-([[:digit:]]*) ([0-9]*):([0-9]*):([0-9]*).*";
+	var $result 		= jcs:regex($regex, $localtime-iso );
+	var $Router_Name 	= <command> "show version";
+	var $O_Router_Name 	= jcs:invoke($Router_Name);
+	var $Actual_Router_Name	= $O_Router_Name/host-name;
+	var $File_name		= $Actual_Router_Name _ "." _ $result[3] _ $result[4] _ substring($result[2],3,4);
+	<func:result select="$File_name">;
+}
+
+
 
 <func:function name="test:Restoral_File_Finder">
 {

@@ -20,7 +20,9 @@ match / {
 
 	var $connection = jcs:open();
 
-	var $File_name		= "/var/home/full/" _ test:File_Name_Creater() _ ".xml";
+	var $File_name		= "/var/home/full/" _ test:Check_if_File_Exits();
+
+	
 	
 	var $Restoral_xml_file		= $File_name ;
 	var $O_Bgp_Config		= document($Restoral_xml_file);
@@ -184,6 +186,53 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")
 
 
 }
+
+
+
+<func:function name="test:Check_if_File_Exits">
+{
+	var $File_Name	=	test:File_Name_Creater() _ ".xml";
+
+	if(test:File_Finder($File_Name)=="no")
+	{
+		expr jcs:output("\n You don't have the restoral in local disk");
+		expr jcs:output("\n You need to download the xml file from FTP server");
+		var $Restoral_File	=test:Restoral_File_Finder();
+		<func:result select="$Restoral_File">;
+	
+	}
+	else
+	{
+		expr jcs:output("\n You have the required file in the local disk");
+		
+		<func:result select="$File_Name">;
+	}
+}
+
+<func:function name="test:File_Finder">
+{
+	param $File_name;
+	var $Code_path_file		= "/var/home/full/";
+	expr jcs:output("\n Searching for code file if exists on router at " _ $Code_path_file);
+	var $File_Search		=  <file-list>{			
+						<path> $Code_path_file;
+					}
+	var $O_File_Search		= jcs:invoke($File_Search);
+	
+
+	if($O_File_Search/directory/file-information[file-name==$File_name])
+	{
+		var $Result="yes";
+		<func:result select="$Result">;
+	}
+	else
+	{
+		var $Result="no";
+		<func:result select="$Result">;
+	}
+}
+
+
 
 <func:function name="test:File_Name_Creater">
 {

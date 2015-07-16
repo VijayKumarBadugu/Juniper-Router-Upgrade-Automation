@@ -20,6 +20,14 @@ match / {
 	expr test:View_System_Running();
 	var $File_name		= test:File_Name_Creater();
 
+/************************************** Checking whether script is being re run ****************************************************/
+	if(test:File_Finder($File_name)=="yes")
+	{
+expr jcs:output("\n " _ $File_name _ "is already present. You may be running Ugrade script twice before restoration. This is dangerous.Please Quit this script");
+	expr test:Quit_Prompt_Function();
+	}
+
+
 	expr jcs:output("\n Saving the router configuration at /var/home/full/" _ $File_name);
 	var $Save_Configuration 	= <get-configuration format="text"> ;
 	var $O_Save_Configuration 	= jcs:invoke( $Save_Configuration);
@@ -59,6 +67,10 @@ match / {
 	expr jcs:output("\n The md5 checksum of the file is " _ $O_Config_File_Checksum/file-checksum/checksum);
 	expr jcs:output("\n Please check whether the md5 matches to the md5 of the file in the FTP server ");
 	expr test:Continue_Prompt_Function();
+
+/**************************************Saving the XML config File ****************************************************/
+
+	expr test:Configuration_Xml_Saved($File_name _ ".xml");
 
 /**************************Searching for the install file and dowloading from back up if not present*************************************/
 /****************************************************************************************************************************************/

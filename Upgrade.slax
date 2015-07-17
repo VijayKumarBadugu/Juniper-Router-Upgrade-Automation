@@ -16,19 +16,25 @@ match / {
 	
 	expr jcs:output("\n \n Welcome to Router Upgradation MOP ");
 	expr jcs:output("\n This script removes the traffic and sets the router in overload ");
-	expr test:Continue_Prompt_Function();
-	expr test:View_System_Running();
+	
 	var $File_name		= test:File_Name_Creater();
 
+	
+
 /************************************** Checking whether script is being re run ****************************************************/
-	if(test:File_Finder($File_name)=="yes")
+
+	expr jcs:output("\n Saving the router configuration at /var/home/full/" _ $File_name);
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
+
+	if(test:File_Finder($File_name _ ".xml")=="yes")
 	{
-expr jcs:output("\n " _ $File_name _ "is already present. You may be running Ugrade script twice before restoration. This is dangerous.Please Quit this script");
+expr jcs:output("\n " _ $File_name _ "is already present. You may be running Ugrade script twice before restoration. This is dangerous. Please Quit this script");
 	expr test:Quit_Prompt_Function();
 	}
 
 
-	expr jcs:output("\n Saving the router configuration at /var/home/full/" _ $File_name);
+	
 	var $Save_Configuration 	= <get-configuration format="text"> ;
 	var $O_Save_Configuration 	= jcs:invoke( $Save_Configuration);
 	var $writing = <file-put> {
@@ -49,15 +55,23 @@ expr jcs:output("\n " _ $File_name _ "is already present. You may be running Ugr
 	
 	}
 
+	
+
 /**************************************Saving the config at backup routing engine ****************************************************/
 	
-	expr jcs:output("\n Transfering the configuration to back up routing engine");	
+	expr jcs:output("\n Transfering the configuration to back up routing engine");
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
+		
 	expr test:Routing_Engine_File_Transfer("/var/home/full/" _ $File_name,test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_name);
 
 
 /**************************************Transferring the config file to FTP server FTP****************************************************/
 
-	
+	expr jcs:output("\n Saving the configuration to the FTP server" );
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
+
 	expr test:FTP_File_Transfer("/var/home/full/" _ $File_name,$File_name);
 
 	var $Config_File_Checksum	= <get-checksum-information>{
@@ -68,13 +82,13 @@ expr jcs:output("\n " _ $File_name _ "is already present. You may be running Ugr
 	expr jcs:output("\n Please check whether the md5 matches to the md5 of the file in the FTP server ");
 	expr test:Continue_Prompt_Function();
 
-/**************************************Saving the XML config File ****************************************************/
 
-	expr test:Configuration_Xml_Saved($File_name _ ".xml");
 
 /**************************Searching for the install file and dowloading from back up if not present*************************************/
 /****************************************************************************************************************************************/
+	expr jcs:output("\n Searching for all the available software image in the local disk" );
 	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 	var $Image_File_Path 		= test:Search_Image_File();
 	expr jcs:output("\n The Final file is " _ 	$Image_File_Path);
@@ -82,6 +96,10 @@ expr jcs:output("\n " _ $File_name _ "is already present. You may be running Ugr
 
 
 /***********************************************show system storage***********************************************************************/
+
+	expr jcs:output("\n Checking whether the router is properly booted from flash disk" );
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 	var $Show_System_Storage	= <command> "show system storage";
 	var $O_Show_System_Storage	= jcs:invoke($Show_System_Storage);
@@ -99,6 +117,10 @@ expr jcs:output("\n " _ $File_name _ "is already present. You may be running Ugr
 
 
 /**************************************Ensure the “compact flash” and “disk” are in the bootlist:*****************************************/
+
+	expr jcs:output("\n Checking whether “compact flash” and “disk” are in the bootlist" );
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 	var $connection = jcs:open();
         var $sysctl_bootdev = {
@@ -125,11 +147,21 @@ in the bootlist  ");
 
 
 /********************************************************* Traffic maintenence************************************************************/
+	expr jcs:output("\n Now removing the traffic" );
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
+
+	
+	
 
 	expr test:Configuration_Xml_Saved($File_name _ ".xml");
 	call Traffic_Removal_Function();
 
 /*********************************************************request system snapshot*********************************************************/
+
+	expr jcs:output("\n Executing request system snapshot " );
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 	var $request_system_snapshot	= <command> "request system snapshot";
 	var $o_request_system_snapshot	= jcs:invoke($request_system_snapshot);
@@ -146,7 +178,10 @@ in the bootlist  ");
 
 /*********************************************************routing engine switch*********************************************************/
 
-	
+	expr jcs:output("\n Checking whether re0 is the master routing engine switch " );
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
+
 	var $Routing_Engine_Checker	= <command> " show chassis routing-engine ";
 	var $O_Routing_Engine_Checker	= jcs:invoke($Routing_Engine_Checker);
 	
@@ -164,9 +199,8 @@ in the bootlist  ");
 /****************************************************************************************************************/
 	
 	expr jcs:output("\n Please use following command to upgrade routing engines");
-	expr jcs:output("\n request system software add " _ $Image_File_Path);
-	expr jcs:output("\n request system reboot media compact-flash"); 
-	expr jcs:output("\n The xml configuration file is stored at /var/home/full//" _ $File_name _ ".xml");
+	expr jcs:output("\n request system software add " _ $Image_File_Path _ " reboot");
+	expr jcs:output("\n The xml configuration file is stored at /var/home/full/" _ $File_name _ ".xml");
 	expr jcs:output("\n Please use Traffic_Restoral.slax to restore the traffic");
 
 	
@@ -177,7 +211,7 @@ in the bootlist  ");
 
 <func:function name="test:View_System_Running">
 {
-	var $Option	=jcs:get-input("\n Do you want to view system status ? ");
+	var $Option	=jcs:get-input("\n Do you want to view system status (yes/no) ? ");
 	if($Option=="yes")
 	{
 		var $Command = jcs:get-input("\n Please enter the command ");
@@ -591,6 +625,9 @@ template Traffic_Removal_Function()
 
 
 	expr jcs:output("\n ===========> Running show aps");
+	
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 /********************************************** show aps *********************************************************************************/
 
@@ -609,7 +646,8 @@ template Traffic_Removal_Function()
 	
 
 	expr jcs:output("\n ===========> show bgp summary| match 1661");
-	
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 	
 	
 	
@@ -630,6 +668,8 @@ template Traffic_Removal_Function()
 	}
  
 	expr jcs:output("\n ===========> show bfd session | match ^152");
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 /********************************************** show bfd session | match ^152 ************************************************************/
 
@@ -646,6 +686,8 @@ template Traffic_Removal_Function()
 	
 	
 	expr jcs:output("\n ===========> show vrrp");
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 /********************************************** show vrrp ********************************************************************************/
 
@@ -661,6 +703,8 @@ template Traffic_Removal_Function()
 	expr test:Continue_Prompt_Function();
 
 	expr jcs:output("\n ===========> show l2circuit connections");
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 /********************************************** show l2circuit connections ***************************************************************/
 
@@ -674,6 +718,8 @@ template Traffic_Removal_Function()
 	}
 
 	expr jcs:output("\n ===========> show mpls lsp | match sig");
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 /********************************************** show mpls lsp | match sig ****************************************************************/
 
@@ -728,6 +774,8 @@ template Traffic_Removal_Function()
 
 	var $connection = jcs:open();
 	expr jcs:output("\n ===========> Deactivating External BGP Neighbors");
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 /********************************************** Deactivating External BGP Neighbors ******************************************************/
 
  	var $Bgp_Config=<get-configuration>;
@@ -738,6 +786,8 @@ template Traffic_Removal_Function()
 	for-each($O_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")||starts-with(peer-as,"65")||starts-with(peer-as,"61")||starts-with(peer-as,"62"))])
 	{
 	expr jcs:output("\n Now deactivating bgp group " _ name _ " with peer-as " _ peer-as);
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 		var $bgp_group_de-activate_configuration={
 						<configuration> {
 							<protocols>{
@@ -755,6 +805,8 @@ template Traffic_Removal_Function()
 	}
 
 	expr jcs:output("\n ===========> show isis database | match overload | match “XT|XL|BB|TL");
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 /**************************************show isis database | match overload | match “XT|XL|BB|TL*******************************************/
 
@@ -796,6 +848,8 @@ template Traffic_Removal_Function()
 
 
 	expr jcs:output("\n ===========> set protocols isis overload");
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 /********************************************** set protocols isis overload **************************************************************/
 	var $isis_configuration={
@@ -825,6 +879,8 @@ template Traffic_Removal_Function()
 	call jcs:load-configuration( $connection, $configuration =$isis_configuration);
 
 	expr jcs:output("\n ===========> deactivate bgp protocols");
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 	
 /********************************************** deactivate bgp protocols *****************************************************************/
 
@@ -842,6 +898,8 @@ template Traffic_Removal_Function()
 
 
 	expr jcs:output("\n ===========> deactivate protocols");
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 /********************************************** deactivate protocols *********************************************************************/
 
@@ -857,6 +915,8 @@ template Traffic_Removal_Function()
 	call jcs:load-configuration( $connection, $configuration =$protocols_deactivate_configuration);
 
 	expr jcs:output("\n ===========> deactivate routing-options");
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 /********************************************** deactivate routing-options *********************************************************************/
 	
@@ -870,6 +930,8 @@ template Traffic_Removal_Function()
 
 	
 	expr jcs:output("\n ===========> deactivate chassis redundancy");
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 /********************************************** deactivate chassis redundancy *********************************************************************/
 
@@ -885,6 +947,8 @@ template Traffic_Removal_Function()
 
 
 	expr jcs:output("\n ===========> deactivate routing-instances");
+	expr test:View_System_Running();
+	expr test:Continue_Prompt_Function();
 
 /********************************************** deactivate routing-instances *********************************************************************/
 
@@ -902,4 +966,3 @@ template Traffic_Removal_Function()
 	}
 
 }
-

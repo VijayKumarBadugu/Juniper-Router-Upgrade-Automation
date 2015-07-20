@@ -24,7 +24,6 @@ match / {
 /************************************** Checking whether script is being re run ****************************************************/
 
 	expr jcs:output("\n Saving the router configuration at /var/home/full/" _ $File_name);
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 	if(test:File_Finder($File_name _ ".xml")=="yes")
@@ -60,7 +59,6 @@ expr jcs:output("\n " _ $File_name _ "is already present. You may be running Ugr
 /**************************************Saving the config at backup routing engine ****************************************************/
 	
 	expr jcs:output("\n Transfering the configuration to back up routing engine");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 		
 	expr test:Routing_Engine_File_Transfer("/var/home/full/" _ $File_name,test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_name);
@@ -69,7 +67,6 @@ expr jcs:output("\n " _ $File_name _ "is already present. You may be running Ugr
 /**************************************Transferring the config file to FTP server FTP****************************************************/
 
 	expr jcs:output("\n Saving the configuration to the FTP server" );
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 	expr test:FTP_File_Transfer("/var/home/full/" _ $File_name,$File_name);
@@ -87,7 +84,6 @@ expr jcs:output("\n " _ $File_name _ "is already present. You may be running Ugr
 /**************************Searching for the install file and dowloading from back up if not present*************************************/
 /****************************************************************************************************************************************/
 	expr jcs:output("\n Searching for all the available software image in the local disk" );
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 	var $Image_File_Path 		= test:Search_Image_File();
@@ -98,7 +94,6 @@ expr jcs:output("\n " _ $File_name _ "is already present. You may be running Ugr
 /***********************************************show system storage***********************************************************************/
 
 	expr jcs:output("\n Checking whether the router is properly booted from flash disk" );
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 	var $Show_System_Storage	= <command> "show system storage";
@@ -119,7 +114,6 @@ expr jcs:output("\n " _ $File_name _ "is already present. You may be running Ugr
 /**************************************Ensure the “compact flash” and “disk” are in the bootlist:*****************************************/
 
 	expr jcs:output("\n Checking whether “compact flash” and “disk” are in the bootlist" );
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 	var $connection = jcs:open();
@@ -148,7 +142,6 @@ in the bootlist  ");
 
 /********************************************************* Traffic maintenence************************************************************/
 	expr jcs:output("\n Now removing the traffic" );
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 	
@@ -160,7 +153,6 @@ in the bootlist  ");
 /*********************************************************request system snapshot*********************************************************/
 
 	expr jcs:output("\n Executing request system snapshot " );
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 	var $request_system_snapshot	= <command> "request system snapshot";
@@ -179,7 +171,6 @@ in the bootlist  ");
 /*********************************************************routing engine switch*********************************************************/
 
 	expr jcs:output("\n Checking whether re0 is the master routing engine switch " );
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 	var $Routing_Engine_Checker	= <command> " show chassis routing-engine ";
@@ -211,24 +202,13 @@ in the bootlist  ");
 
 <func:function name="test:View_System_Running">
 {
-	var $Option	=jcs:get-input("\n Do you want to view system status (yes/no) ? ");
-	if($Option=="yes")
-	{
+	
 		var $Command = jcs:get-input("\n Please enter the command ");
 		var $Show_Command = <command> $Command;
 		var $O_Show_Command =  jcs:invoke($Show_Command);
 		expr jcs:output($O_Show_Command);
-		expr test:View_System_Running();
+		expr test:Continue_Prompt_Function();
 		
-	}
-	else
-	{
-		if($Option!="no")
-		{
-			expr test:View_System_Running();
-		}
-		
-	}
 }
 
 
@@ -560,20 +540,30 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 
 <func:function name="test:Continue_Prompt_Function">
 {
-	var $var = jcs:get-input( "\n Do you want to continue (yes/no) ?  " );
-	if($var=="no")     
+	expr jcs:output("\n Please Choose \"yes\"  to Continue");
+	expr jcs:output(" 		  \"quit\" to Exit from the script");
+	expr jcs:output(" 		  \"show\" to run operational show command");
+	var $var = jcs:get-input( "Please enter : " );
+	if($var=="quit")     
 	{ 
 	  		<xsl:message terminate="yes"> "Aborting the script";
 	} 
 	else
 	{
-		if($var!="yes")
+		if($var=="show")
 		{
+			expr test:View_System_Running();
+		}
+		else
+		{
+			if($var!="yes")
+			{
 		
-			<xsl:message> "Please choose between 'yes' or 'no'.\n";
-			expr test:Continue_Prompt_Function();
+				<xsl:message> "Please choose between 'yes' or 'no'.\n";
+				expr test:Continue_Prompt_Function();
 				
 			
+			}
 		}
 	}
 	
@@ -626,7 +616,6 @@ template Traffic_Removal_Function()
 
 	expr jcs:output("\n ===========> Running show aps");
 	
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** show aps *********************************************************************************/
@@ -646,7 +635,6 @@ template Traffic_Removal_Function()
 	
 
 	expr jcs:output("\n ===========> show bgp summary| match 1661");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 	
 	
@@ -668,7 +656,6 @@ template Traffic_Removal_Function()
 	}
  
 	expr jcs:output("\n ===========> show bfd session | match ^152");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** show bfd session | match ^152 ************************************************************/
@@ -686,7 +673,6 @@ template Traffic_Removal_Function()
 	
 	
 	expr jcs:output("\n ===========> show vrrp");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** show vrrp ********************************************************************************/
@@ -703,7 +689,6 @@ template Traffic_Removal_Function()
 	expr test:Continue_Prompt_Function();
 
 	expr jcs:output("\n ===========> show l2circuit connections");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** show l2circuit connections ***************************************************************/
@@ -718,7 +703,6 @@ template Traffic_Removal_Function()
 	}
 
 	expr jcs:output("\n ===========> show mpls lsp | match sig");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** show mpls lsp | match sig ****************************************************************/
@@ -774,7 +758,6 @@ template Traffic_Removal_Function()
 
 	var $connection = jcs:open();
 	expr jcs:output("\n ===========> Deactivating External BGP Neighbors");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 /********************************************** Deactivating External BGP Neighbors ******************************************************/
 
@@ -786,7 +769,6 @@ template Traffic_Removal_Function()
 	for-each($O_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")||starts-with(peer-as,"65")||starts-with(peer-as,"61")||starts-with(peer-as,"62"))])
 	{
 	expr jcs:output("\n Now deactivating bgp group " _ name _ " with peer-as " _ peer-as);
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 		var $bgp_group_de-activate_configuration={
 						<configuration> {
@@ -805,7 +787,6 @@ template Traffic_Removal_Function()
 	}
 
 	expr jcs:output("\n ===========> show isis database | match overload | match “XT|XL|BB|TL");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /**************************************show isis database | match overload | match “XT|XL|BB|TL*******************************************/
@@ -848,7 +829,6 @@ template Traffic_Removal_Function()
 
 
 	expr jcs:output("\n ===========> set protocols isis overload");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** set protocols isis overload **************************************************************/
@@ -879,7 +859,6 @@ template Traffic_Removal_Function()
 	call jcs:load-configuration( $connection, $configuration =$isis_configuration);
 
 	expr jcs:output("\n ===========> deactivate bgp protocols");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 	
 /********************************************** deactivate bgp protocols *****************************************************************/
@@ -898,7 +877,6 @@ template Traffic_Removal_Function()
 
 
 	expr jcs:output("\n ===========> deactivate protocols");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** deactivate protocols *********************************************************************/
@@ -915,7 +893,6 @@ template Traffic_Removal_Function()
 	call jcs:load-configuration( $connection, $configuration =$protocols_deactivate_configuration);
 
 	expr jcs:output("\n ===========> deactivate routing-options");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** deactivate routing-options *********************************************************************/
@@ -930,7 +907,6 @@ template Traffic_Removal_Function()
 
 	
 	expr jcs:output("\n ===========> deactivate chassis redundancy");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** deactivate chassis redundancy *********************************************************************/
@@ -947,7 +923,6 @@ template Traffic_Removal_Function()
 
 
 	expr jcs:output("\n ===========> deactivate routing-instances");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** deactivate routing-instances *********************************************************************/

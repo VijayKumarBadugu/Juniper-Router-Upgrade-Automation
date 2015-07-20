@@ -28,7 +28,6 @@ match / {
 	var $O_Bgp_Config		= document($Restoral_xml_file);
 
 	expr jcs:output("===========> activate routing-instances");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 	
 /********************************************** activate routing-instances *********************************************************************/
@@ -47,7 +46,6 @@ match / {
 
 
 	expr jcs:output("===========> activate routing-options");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** activate routing-options *********************************************************************/
@@ -64,7 +62,6 @@ match / {
 	
 
 	expr jcs:output("===========> activate chassis redundancy");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** activate chassis redundancy ***********************************************************************/
@@ -79,7 +76,6 @@ match / {
 	call jcs:load-configuration( $connection, $configuration =$chassis_redundancy_activate);
 	
 	expr jcs:output("===========> activate protocols");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** activate protocols ***********************************************************************/
@@ -93,7 +89,6 @@ match / {
 	call jcs:load-configuration( $connection, $configuration =$protocols_activate_configuration);
 	
 	expr jcs:output("===========> activate bgp");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** activate bgp *****************************************************************************/
@@ -111,7 +106,6 @@ match / {
 	call jcs:load-configuration( $connection, $configuration =$bgp_activate_configuration);
 
 	expr jcs:output("===========> delete protocols isis overload");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** delete protocols isis overload ***********************************************************/
@@ -129,7 +123,6 @@ match / {
 	call jcs:load-configuration( $connection, $configuration =$isis_delete_configuration);
 
 	expr jcs:output("===========> set protocols isis overload timeout 600");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** set protocols isis overload timeout 600  *************************************************/
@@ -150,7 +143,6 @@ match / {
 
 
 	expr jcs:output("===========> activate group <GROUP_NAME>");
-	expr test:View_System_Running();
 	expr test:Continue_Prompt_Function();
 
 /********************************************** activate group <GROUP_NAME>  *************************************************/
@@ -170,7 +162,6 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")
 			{
 				expr jcs:output("\n Now activating bgp group " _ name _ " with peer-as " _ peer-as);
 				expr test:Continue_Prompt_Function();
-				expr test:View_System_Running();
 				var $bgp_group_activate_configuration={
 						<configuration> {
 							<protocols>{
@@ -305,20 +296,30 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")
 
 <func:function name="test:Continue_Prompt_Function">
 {
-	var $var = jcs:get-input("\n Do you want to continue (yes/no) ? " );
-	if($var=="no")     
+	expr jcs:output("\n Please Choose \"yes\"  to Continue");
+	expr jcs:output(" 		  \"quit\" to Exit from the script");
+	expr jcs:output(" 		  \"run\" to run operational show command");
+	var $var = jcs:get-input( "Please enter : " );
+	if($var=="quit")     
 	{ 
 	  		<xsl:message terminate="yes"> "Aborting the script";
 	} 
 	else
 	{
-		if($var!="yes")
+		if($var=="run")
 		{
+			expr test:View_System_Running();
+		}
+		else
+		{
+			if($var!="yes")
+			{
 		
-			<xsl:message> "Please choose between 'yes' or 'no'.\n";
-			expr test:Continue_Prompt_Function();
+				<xsl:message> "Please choose between 'yes' or 'no'.\n";
+				expr test:Continue_Prompt_Function();
 				
 			
+			}
 		}
 	}
 	
@@ -391,23 +392,12 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")
 
 <func:function name="test:View_System_Running">
 {
-	var $Option	=jcs:get-input("\n Do you want to view system status (yes/no) ? ");
-	if($Option=="yes")
-	{
+	
 		var $Command = jcs:get-input("\n Please enter the command ");
 		var $Show_Command = <command> $Command;
 		var $O_Show_Command =  jcs:invoke($Show_Command);
 		expr jcs:output($O_Show_Command);
-		expr test:View_System_Running();
+		expr test:Continue_Prompt_Function();
 		
-	}
-	else
-	{
-		if($Option!="no")
-		{
-			expr test:View_System_Running();
-		}
-		
-	}
 }
 

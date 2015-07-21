@@ -207,7 +207,7 @@ in the bootlist  ");
 		var $Show_Command = <command> $Command;
 		var $O_Show_Command =  jcs:invoke($Show_Command);
 		expr jcs:output($O_Show_Command);
-		expr test:Continue_Prompt_Function();
+		
 		
 }
 
@@ -540,10 +540,9 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 
 <func:function name="test:Continue_Prompt_Function">
 {
-	expr jcs:output("\n Please Choose \"yes\"  to Continue");
-	expr jcs:output(" 		  \"quit\" to Exit from the script");
-	expr jcs:output(" 		  \"show\" to run operational show command");
-	var $var = jcs:get-input( "Please enter : " );
+	expr jcs:output("\n Please Choose \"yes\" [to Continue],\"quit\" [to Exit],\"show\" [show command]");
+	
+	var $var = jcs:get-input(" Enter: ");
 	if($var=="quit")     
 	{ 
 	  		<xsl:message terminate="yes"> "Aborting the script";
@@ -553,6 +552,7 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 		if($var=="show")
 		{
 			expr test:View_System_Running();
+			expr test:Continue_Prompt_Function();
 		}
 		else
 		{
@@ -585,20 +585,29 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 
 <func:function name="test:Quit_Prompt_Function">
 {
-	var $var = jcs:get-input( "\n Do you want to Quit (yes/no) ? " );
+	expr jcs:output("\n Please Choose \"yes\"  [to Quit], \"continue\" [to continue], \"show\" [show command]");
+	var $var = jcs:get-input( " Enter : " );
 	if($var=="yes")     
 	{ 
 	  		<xsl:message terminate="yes"> "Aborting the script";
 	} 
 	else
 	{
-		if($var!="no")
+		if($var=="show")
 		{
-		
-			<xsl:message> "\n Please choose between 'yes' or 'no'.\n";
+			expr test:View_System_Running();
 			expr test:Quit_Prompt_Function();
+		}
+		else
+		{
+			if($var!="continue")
+			{
+		
+				<xsl:message> "Wrong Option . Please retry\n";
+				expr test:Quit_Prompt_Function();
 				
 			
+			}
 		}
 	}
 	

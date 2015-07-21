@@ -156,10 +156,10 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")
 		
 		var $Temp_bgp_grp = name;
 			
-		if($O_Bgp_Config/configuration/protocols/bgp/group[(name==$Temp_bgp_grp)])
+		if($O_Bgp_Config/configuration/protocols/bgp/group[(not(@inactive))&&(name==$Temp_bgp_grp)])
 		{	
-			if(not($O_Bgp_Config/configuration/protocols/bgp/group[(@inactive)]))
-			{
+			/*if(not($O_Bgp_Config/configuration/protocols/bgp/group[(@inactive)]))
+			{*/
 				expr jcs:output("\n Now activating bgp group " _ name _ " with peer-as " _ peer-as);
 				expr test:Continue_Prompt_Function();
 				var $bgp_group_activate_configuration={
@@ -175,7 +175,7 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")
 		    						}
 					  		}
 			call jcs:load-configuration( $connection, $configuration = $bgp_group_activate_configuration);
-			}
+			/*}*/
 	
 		}
 
@@ -296,19 +296,19 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")
 
 <func:function name="test:Continue_Prompt_Function">
 {
-	expr jcs:output("\n Please Choose \"yes\"  to Continue");
-	expr jcs:output(" 		  \"quit\" to Exit from the script");
-	expr jcs:output(" 		  \"run\" to run operational show command");
-	var $var = jcs:get-input( "Please enter : " );
+	expr jcs:output("\n Please Choose \"yes\" [to Continue],\"quit\" [to Exit],\"show\" [show command]");
+	
+	var $var = jcs:get-input(" Enter: ");
 	if($var=="quit")     
 	{ 
 	  		<xsl:message terminate="yes"> "Aborting the script";
 	} 
 	else
 	{
-		if($var=="run")
+		if($var=="show")
 		{
 			expr test:View_System_Running();
+			expr test:Continue_Prompt_Function();
 		}
 		else
 		{
@@ -397,7 +397,7 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")
 		var $Show_Command = <command> $Command;
 		var $O_Show_Command =  jcs:invoke($Show_Command);
 		expr jcs:output($O_Show_Command);
-		expr test:Continue_Prompt_Function();
+		
 		
 }
 

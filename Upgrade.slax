@@ -28,7 +28,7 @@ match / {
 
 	if(test:File_Finder($File_name _ ".xml")=="yes")
 	{
-expr jcs:output("\n " _ $File_name _ "is already present. You may be running Ugrade script twice before restoration. This is dangerous. Please Quit this script");
+expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be running Ugrade script twice before restoration. This is dangerous. Please Quit this script");
 	expr test:Quit_Prompt_Function();
 	}
 
@@ -291,11 +291,11 @@ in the bootlist  ");
 			expr jcs:output("\n " _ file-name);
 		}
 		
-		var $Image_Option = jcs:get-input("\n Did you find the required Image file? ");
+		var $Image_Option = jcs:get-input("\n Did you find the required Image file (yes/no) ? ");
 		
 		if($Image_Option=="yes")
 		{
-			var $Image_File	= jcs:get-input("\n Please give the image file name ?");
+			var $Image_File	= jcs:get-input("\n Please give the image file name ");
 			if($O_File_Search/directory/file-information[file-name==$Image_File])
 			{
 				expr jcs:output("\n Checking the Image file whether it is present in the backup routing engine");
@@ -695,7 +695,7 @@ template Traffic_Removal_Function()
 		expr test:Continue_Prompt_Function();
 	}
 
-	expr test:Continue_Prompt_Function();
+	
 
 	expr jcs:output("\n ===========> show l2circuit connections");
 	expr test:Continue_Prompt_Function();

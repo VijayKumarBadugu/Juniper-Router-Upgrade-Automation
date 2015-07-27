@@ -216,12 +216,40 @@ in the bootlist  ");
 {
 
 	param $File_Name;
+	
 	var $xml_config		= <get-configuration format="xml">;
 	var $o_xml_config	= jcs:invoke($xml_config);
+	var $get-bgp		= <get-bgp-summary-information format="xml">;
+	var $o_get-bgp		= jcs:invoke($get-bgp);
+
 	var $File_Name_Xml	= $File_Name;
-	<exsl:document href="/var/tmp/" _ $File_Name_Xml>{
+	
+	
+	var $content = {
+			<Restoral> {
+				<Restoral-Conf>{
 					copy-of $o_xml_config;
-							}
+					
+					
+				}
+				<Restoral-Bgp>{
+						copy-of $o_get-bgp;
+					}
+				
+				}
+			
+			}
+	
+
+	
+	<xsl:document href="/var/tmp/" _ $File_Name method="xml" indent="yes"> {
+
+						copy-of $content;
+
+									}
+	
+	
+
 	
 	var $xml-file-copy	=<file-copy> {
      			 		<source> "/var/tmp/" _ $File_Name_Xml;
@@ -778,8 +806,7 @@ template Traffic_Removal_Function()
 	for-each($O_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")||starts-with(peer-as,"65")||starts-with(peer-as,"61")||starts-with(peer-as,"62"))])
 	{
 	expr jcs:output("\n Now deactivating bgp group " _ name _ " with peer-as " _ peer-as);
-	expr test:Continue_Prompt_Function();
-		var $bgp_group_de-activate_configuration={
+			var $bgp_group_de-activate_configuration={
 						<configuration> {
 							<protocols>{
 								<bgp>	{
@@ -884,8 +911,14 @@ template Traffic_Removal_Function()
 		
 	call jcs:load-configuration( $connection, $configuration =$bgp_de-activate_configuration);
 
+/********************************************** Show KRT Waiting *****************************************************************/
+
+	expr test:Show_KRT_Queue();
+
 
 	expr jcs:output("\n ===========> deactivate protocols");
+	
+	
 	expr test:Continue_Prompt_Function();
 
 /********************************************** deactivate protocols *********************************************************************/
@@ -900,6 +933,8 @@ template Traffic_Removal_Function()
 
 		
 	call jcs:load-configuration( $connection, $configuration =$protocols_deactivate_configuration);
+	
+	
 
 	expr jcs:output("\n ===========> deactivate routing-options");
 	expr test:Continue_Prompt_Function();
@@ -949,4 +984,63 @@ template Traffic_Removal_Function()
 		
 	}
 
+}
+
+
+<func:function name="test:Show_KRT_Queue">
+{
+
+	
+	var $Return = test:Show_KRT_Queue_Checker(4,0);
+	
+
+}
+
+<func:function name="test:Show_KRT_Queue_Checker">
+{
+	param $Count;
+	param $Perfect;
+	var $show_krt_queue	= <command> "show krt queue";
+	var $o_show_krt_queue	= jcs:invoke($show_krt_queue);
+	expr jcs:output(" Waiting for 10 secs");
+	expr jcs:sleep( 10 );
+	
+	
+	if($Count==0)
+	{
+		expr jcs:output("Queue didnt get converge in 10 minutes .Something is wrong.!");
+		expr test:Quit_Prompt_Function();
+		
+	}
+	for-each($o_show_krt_queue/krt-queue)
+	{
+		
+		if(./krtq-queue-length!=0)
+		{ 	
+			
+			
+			var $Return = test:Show_KRT_Queue_Checker($Count - 1,0);
+			<func:result select="$Return">;	
+			
+			
+			
+		}
+	}
+	expr jcs:output(" Queue is Empty");
+	if($Perfect==1)
+	{
+			
+
+			var $Return=$Perfect+1;
+			<func:result select="$Return">;	
+		
+	}
+	else
+	{
+			var $Return = test:Show_KRT_Queue_Checker($Count - 1,1);
+			
+			<func:result select="$Return">;
+	}
+	
+	
 }

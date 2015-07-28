@@ -1,0 +1,81 @@
+/*
+$Id$
+*/
+
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns adv = "http://xml.juniper.net/adventure";
+ns func extension = "http://exslt.org/functions";
+ns test = "http://xml.juniper.net/test";
+ns exsl extension = "http://exslt.org/common";
+ns set = "http://exslt.org/sets";
+ns redirect extension = "org.apache.xalan.xslt.extensions.Redirect";
+ns xmlns="http://xml.juniper.net/junos/*/junos";
+
+
+import "../import/junos.xsl";
+match / {
+	var $Pre_Maintainence	:= 	{
+					<Restoral> {
+					<Restoral-int-desc>	{
+									<physical-interface>{
+            									<name>"ge-1/0/0";
+            									<admin-status>"up";            											<oper-status>"up";
+            									<description>"pch-iad8-1-private_peer]AS42 - OTN:962QG8DM CID:1124802";
+											}
+									<physical-interface>{
+            									<name>"ge-1/0/1";
+            									<admin-status>"up";            											<oper-status>"up";
+            									<description>"pch-iad8-1-private_peer]AS42 - OTN:962QG8DM CID:1124802";
+											}
+								}
+						
+						}
+					}
+	
+	var $Post_Maintainence	:= 	{
+					<Restoral> {
+					<Restoral-int-desc>	{
+									<physical-interface>{
+            									<name>"ge-1/0/0";
+            									<admin-status>"down";            											<oper-status>"up";
+            									<description>"pch-iad8-1-private_peer]AS42 - OTN:962QG8DM CID:1124802";
+											}
+									<physical-interface>{
+            									<name>"ge-1/0/1";
+            									<admin-status>"down";            											<oper-status>"up";
+            									<description>"pch-iad8-1-private_peer]AS42 - OTN:962QG8DM CID:1124802";
+											}
+								}
+						
+						}
+					}
+	expr test:Diff_int_desc($Pre_Maintainence,$Post_Maintainence);
+
+
+}
+
+
+<func:function name="test:Diff_int_desc">
+{
+	param $Pre_Maintainence;
+	param $Post_Maintainence;
+	
+	
+	for-each($Post_Maintainence/Restoral/Restoral-int-desc/physical-interface[(admin-status!="up")||(oper-status!="up") ])
+	{
+		var $post-interface-name	=name;
+		var $admin-status		=admin-status;
+		var $oper-status		=oper-status;	
+		
+	if($Pre_Maintainence/Restoral/Restoral-int-desc/physical-interface[((admin-status!=$admin-status)||(oper-status!=$oper-status))&&($post-interface-name==name)])
+		{
+				expr jcs:output("\n Interface " _ name _ " is not in \"Up\" state Post maintenance");
+		}
+	}
+
+			
+	
+}

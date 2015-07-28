@@ -1,0 +1,158 @@
+/*
+$Id$
+*/
+
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns adv = "http://xml.juniper.net/adventure";
+ns func extension = "http://exslt.org/functions";
+ns test = "http://xml.juniper.net/test";
+ns exsl extension = "http://exslt.org/common";
+ns set = "http://exslt.org/sets";
+ns redirect extension = "org.apache.xalan.xslt.extensions.Redirect";
+ns xmlns="http://xml.juniper.net/junos/*/junos";
+
+
+import "../import/junos.xsl";
+match / {
+	var $fpc-pic-status	= <command> "show chassis fpc pic-status";
+	var $o_fpc-pic-status	= jcs:invoke($fpc-pic-status);
+	var $Pre_Maintainence	:= 	{
+					<Restoral> {
+					<Restoral-fpc-pic>	{
+								 	
+										<fpc>{
+											<slot>0;
+            										<state>"Online";
+            										<description>"M120 CFPC OC192";
+
+											<pic>
+												{
+                											<pic-slot>0;
+                											<pic-state>"Online";
+                											<pic-type>"1x OC-192 SONET XFP";
+												}
+
+												
+										     }
+										<fpc>{
+            										<slot>1;
+            										<state>"Online";
+            										<description>"M120 CFPC OC192";
+            										<pic>
+											{
+                										<pic-slot>0;
+                										<pic-state>"Online";
+                										<pic-type>"1x OC-192 SONET XFP";
+											}
+										}
+									
+								}
+						
+						}
+					}
+	
+	
+
+
+	var $Post_Maintainence	:= 	{
+					<Restoral> {
+					<Restoral-fpc-pic>	{
+								 	
+										<fpc>{
+											<slot>0;
+            										<state>"Online";
+            										<description>"M120 CFPC OC192";
+
+											<pic>
+												{
+                											<pic-slot>0;
+                											<pic-state>"Onine";
+                											<pic-type>"1x OC-192 SONET XFP";
+												}
+
+												
+										     }
+										<fpc>{
+            										<slot>1;
+            										<state>"Online";
+            										<description>"M120 CFPC OC192";
+            										<pic>
+											{
+                										<pic-slot>0;
+                										<pic-state>"Online";
+                										<pic-type>"1x OC-192 SONET XFP";
+											}
+										}
+									
+								}
+						
+						}
+					}
+	
+	expr test:Diff_chassis_fpc($Pre_Maintainence,$Post_Maintainence);
+
+
+}
+
+
+<func:function name="test:Diff_chassis_fpc">
+{
+	param $Pre_Maintainence;
+	param $Post_Maintainence;
+	
+	
+	for-each($Post_Maintainence/Restoral/Restoral-fpc-pic/fpc)
+	{
+		var $post-slot	=slot;
+		var $state	=state;
+		if($Pre_Maintainence/Restoral/Restoral-fpc-pic/fpc[($post-slot==slot)&&(state!=$state)])
+		{
+			expr jcs:output("The status of FPC with slot " _ $post-slot _ " changed"); 
+		}
+		for-each($Post_Maintainence/Restoral/Restoral-fpc-pic/fpc[slot==$post-slot]/pic[pic-state!="Online"])
+		{
+			var $post-pic-slot	=pic-slot;
+			var $post-pic-state	=pic-state;
+			if($Pre_Maintainence/Restoral/Restoral-fpc-pic/fpc[slot==$post-slot]/pic[(pic-slot==$post-pic-slot)&&($post-pic-state!=pic-state)])
+			{
+				expr jcs:output("The status of FPC PIC with slot " _ $post-slot _ " and PIC " _ $post-pic-slot _ " changed"); 
+			}
+			
+		}
+	}
+
+			
+	
+}
+
+
+/*
+
+var $Pre_Maintainence	:= 	{
+					<Restoral> {
+					<Restoral-fpc-pic>	{
+								 	for-each($o_fpc-pic-status/fpc)
+									{
+										<fpc>{
+											var $slot=slot;
+											<slot>slot;
+            										<state>state;
+            										<description>description;
+												for-each($o_fpc-pic-status/fpc[$slot==slot]/pic)
+												{
+													<pic>{
+                											<pic-slot>pic-slot;
+                											<pic-state>pic-state;
+                											<pic-type>pic-type;
+														}
+
+												}
+										     }
+									}
+								}
+						
+						}
+					}*/

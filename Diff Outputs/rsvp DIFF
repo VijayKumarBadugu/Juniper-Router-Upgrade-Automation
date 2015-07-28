@@ -1,0 +1,76 @@
+/*
+$Id$
+*/
+
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns adv = "http://xml.juniper.net/adventure";
+ns func extension = "http://exslt.org/functions";
+ns test = "http://xml.juniper.net/test";
+ns exsl extension = "http://exslt.org/common";
+ns set = "http://exslt.org/sets";
+ns redirect extension = "org.apache.xalan.xslt.extensions.Redirect";
+ns xmlns="http://xml.juniper.net/junos/*/junos";
+
+
+import "../import/junos.xsl";
+match / {
+	var $Pre_Maintainence	:= 	{
+					<Restoral> {
+					<Restoral-rsvp-interface>	{
+									<rsvp-interface>
+										{
+            										<interface-name>"ae1.0";
+            										<index>326;
+            										<rsvp-status>"Up";
+										}
+									<rsvp-interface>
+										{
+            										<interface-name>"ae2.0";
+            										<index>326;
+            										<rsvp-status>"Up";
+										}
+								}
+						}
+					}
+	
+	var $Post_Maintainence	:= 	{
+					<Restoral> {
+					<Restoral-rsvp-interface>	{
+									<rsvp-interface>
+										{
+            										<interface-name>"ae1.0";
+            										<index>326;
+            										<rsvp-status>"Down";
+										}
+								}
+						}
+					}
+	expr test:Diff_rsvp_interfaces($Pre_Maintainence,$Post_Maintainence);
+
+
+}
+
+
+<func:function name="test:Diff_rsvp_interfaces">
+{
+	param $Pre_Maintainence;
+	param $Post_Maintainence;
+	expr jcs:output("\n Pre-Maintenance rsvp interfaces  : " _ count($Pre_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface));
+	expr jcs:output("\n Post-Maintenance rsvp interfaces : " _ count($Post_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface));
+	
+	for-each($Post_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface[rsvp-status!="Up"])
+	{
+		var $post-interface-name=interface-name;
+		expr jcs:output( $post-interface-name);
+		if($Pre_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface[(rsvp-status=="Up")&&(interface-name==$post-interface-name)])
+		{
+				expr jcs:output("\n Interface " _ interface-name _ " is not in \"Up\" state Post maintenance");
+		}
+	}
+
+			
+	
+}

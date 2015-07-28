@@ -1,0 +1,88 @@
+/*
+$Id$
+*/
+
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns adv = "http://xml.juniper.net/adventure";
+ns func extension = "http://exslt.org/functions";
+ns test = "http://xml.juniper.net/test";
+ns exsl extension = "http://exslt.org/common";
+ns set = "http://exslt.org/sets";
+ns redirect extension = "org.apache.xalan.xslt.extensions.Redirect";
+ns xmlns="http://xml.juniper.net/junos/*/junos";
+
+
+import "../import/junos.xsl";
+match / {
+	var $Pre_Maintainence	:= 	{
+					<Restoral> {
+					<Restoral-ldp-session>	{
+									<ldp-session>{
+            									<ldp-neighbor-address>"130.81.248.204";
+            									<ldp-session-state>"Operational";
+            									<ldp-connection-state>"Open";
+            									<ldp-remaining-time>26;
+            									<ldp-session-adv-mode>"DU";
+							
+										}
+									<ldp-session>{
+            									<ldp-neighbor-address>"130.81.248.204";
+            									<ldp-session-state>"Operational";
+            									<ldp-connection-state>"Open";
+            									<ldp-remaining-time>26;
+            									<ldp-session-adv-mode>"DU";
+							
+										}
+								}
+						}
+					}
+	
+	var $Post_Maintainence	:= 	{
+					<Restoral> {
+					<Restoral-ldp-session>	{
+									<ldp-session>{
+            									<ldp-neighbor-address>"130.81.248.204";
+            									<ldp-session-state>"Operational";
+            									<ldp-connection-state>"Open";
+            									<ldp-remaining-time>26;
+            									<ldp-session-adv-mode>"DU";
+							
+										}
+									<ldp-session>{
+            									<ldp-neighbor-address>"130.81.248.204";
+            									<ldp-session-state>"Operational";
+            									<ldp-connection-state>"Open";
+            									<ldp-remaining-time>26;
+            									<ldp-session-adv-mode>"DU";
+							
+										}
+									<ldp-session>{
+            									<ldp-neighbor-address>"130.81.248.204";
+            									<ldp-session-state>"Operational";
+            									<ldp-connection-state>"Open";
+            									<ldp-remaining-time>26;
+            									<ldp-session-adv-mode>"DU";
+							
+										}
+								}
+						}
+					}
+	expr test:Diff_Isis_Adjacency($Pre_Maintainence,$Post_Maintainence);
+
+
+}
+
+
+<func:function name="test:Diff_Isis_Adjacency">
+{
+	param $Pre_Maintainence;
+	param $Post_Maintainence;
+	expr jcs:output("\n Pre-Maintenance LDP Sessions  : " _ count($Pre_Maintainence/Restoral/Restoral-ldp-session/ldp-session));
+	expr jcs:output("\n Post-Maintenance LDP Sessions : " _ count($Post_Maintainence/Restoral/Restoral-ldp-session/ldp-session));
+
+			
+	
+}

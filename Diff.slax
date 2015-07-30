@@ -1,0 +1,433 @@
+/*
+$Id$
+*/
+
+version 1.0;
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+ns adv = "http://xml.juniper.net/adventure";
+ns func extension = "http://exslt.org/functions";
+ns test = "http://xml.juniper.net/test";
+ns exsl extension = "http://exslt.org/common";
+
+import "../import/junos.xsl";
+match / {
+
+	
+	var $content=test:Tree-construct();
+	<xsl:document href="/var/tmp/COMB" method="xml" indent="yes"> {
+
+						copy-of $content;
+
+									}
+	var $Pre_Maintainence=document("/var/tmp/COMB");
+	var $Post_Maintainence=test:Tree-construct();
+	expr test:Diff_chassis_fpc($Pre_Maintainence,$Post_Maintainence);
+	expr test:Diff_Isis_Adjacency($Pre_Maintainence,$Post_Maintainence);
+	expr test:Diff_BGP_Summary($Pre_Maintainence,$Post_Maintainence);
+	expr test:Diff_LDP_Neighbor($Pre_Maintainence,$Post_Maintainence);
+	expr test:Diff_LDP_Sessions($Pre_Maintainence,$Post_Maintainence);
+	expr test:Diff_BFD_Session($Pre_Maintainence,$Post_Maintainence);
+	expr test:Diff_int_desc($Pre_Maintainence,$Post_Maintainence);
+	expr test:Diff_mpls_interfaces($Pre_Maintainence,$Post_Maintainence);
+	expr test:Diff_rsvp_interfaces($Pre_Maintainence,$Post_Maintainence);
+
+
+
+}
+
+
+
+
+<func:function name="test:Tree-construct">
+{
+	var $xml_config			= <get-configuration format="xml">;
+	var $o_xml_config		= jcs:invoke($xml_config);
+	var $fpc-pic-status		= <command> "show chassis fpc pic-status";
+	var $o_fpc-pic-status		= jcs:invoke($fpc-pic-status);
+	var $get-isis-adjacency 	= <command> "show isis adjacency";
+	var $o-get-isis-adjacency 	= jcs:invoke($get-isis-adjacency);
+	var $get-bgp			= <command> "show bgp summary";
+	var $o_get-bgp			= jcs:invoke($get-bgp);
+
+	var $ldp_neighbor		= <command> "show ldp neighbor";
+	var $o_ldp_neighbor		= jcs:invoke($ldp_neighbor);
+
+	var $ldp_session		= <command> "show ldp session";
+	var $o_ldp_session		= jcs:invoke($ldp_session);
+
+	var $show_bfd			= <command> "show bfd session";
+	var $o_show_bfd			= jcs:invoke($show_bfd);
+
+	var $show_route			= <command> "show route summary";
+	var $o_show_route		= jcs:invoke($show_route);
+	var $show_chassis		= <command> "show chassis summary";
+	var $o_show_chassis		= jcs:invoke($show_chassis);
+	
+	var $show_interface_des		= <command> "show interface descriptions";
+	var $o_show_interface_des	= jcs:invoke($show_interface_des);
+
+	var $show_mpls_lsp_terse	= <command> "show mpls lsp terse";
+	var $o_show_mpls_lsp_terse	= jcs:invoke($show_mpls_lsp_terse);
+
+	var $show_mpls_int		= <command> "show mpls interface";
+	var $o_show_mpls_int		= jcs:invoke($show_mpls_int);
+
+	var $show_rsvp_int		= <command> "show rsvp interface";
+	var $o_show_rsvp_int		= jcs:invoke($show_rsvp_int);
+
+
+var $content := {
+			<Restoral> {
+				<Restoral-Conf>{
+					copy-of $o_xml_config;
+					
+					}
+				
+				<Restoral-rsvp-interface>	{
+									for-each($o_show_rsvp_int/rsvp-interface)
+									{
+										<rsvp-interface>
+											{
+            											<interface-name>interface-name;
+            											<index>index;
+            											<rsvp-status>rsvp-status;
+										}
+									}
+								}
+
+				<Restoral-mpls-interface>	{
+									for-each($o_show_mpls_int/mpls-interface)
+									{
+										<mpls-interface>{
+            										<interface-name>interface-name;
+            										<mpls-interface-state>mpls-interface-state;
+												}
+									}
+								}
+				<Restoral-int-desc>	{
+								for-each($o_show_interface_des/physical-interface)
+								{
+									<physical-interface>{
+            									<name>name;
+            									<admin-status>admin-status;            											<oper-status>oper-status;
+            									<description>description;
+											}
+								}
+									
+							}
+
+				<Restoral-bfd>	{
+							for-each($o_show_bfd/bfd-session)
+							{
+							<bfd-session>{
+            							<session-neighbor>session-neighbor;
+            							<session-state>session-state;
+            							<session-interface>session-interface;
+            							<session-detection-time>session-detection-time;
+            							<session-transmission-interval>session-transmission-interval;
+            							<session-adaptive-multiplier>session-adaptive-multiplier;
+					
+								}
+							}
+						}
+				
+				<Restoral-ldp-session>	{
+								for-each($o_ldp_session/ldp-session)
+								{
+									<ldp-session>{
+            									<ldp-neighbor-address>ldp-neighbor-address;
+            									<ldp-session-state>ldp-session-state;
+            									<ldp-connection-state>ldp-connection-state;
+            									<ldp-remaining-time>ldp-remaining-time;
+            									<ldp-session-adv-mode>ldp-session-adv-mode;
+							
+										}
+								}
+									
+							}
+
+				<Restoral-ldp-neighbor>	{
+								for-each($o_ldp_neighbor/ldp-neighbor)
+								{
+									 <ldp-neighbor>{
+            									<ldp-neighbor-address>ldp-neighbor-address;
+            									<interface-name>interface-name;
+            									<ldp-label-space-id>ldp-label-space-id;
+            									<ldp-remaining-time>ldp-remaining-time;
+											}
+								}
+									
+							}
+
+				<Restoral-Bgp>	{
+								for-each($o_get-bgp/bgp-peer)
+								{
+									<bgp-peer>{
+											<peer-as>peer-as;
+											<peer-state>peer-state;
+											<description>description;
+										}
+								}
+									
+									
+								
+						}
+				<Restoral-Isis>	{
+							for-each($o-get-isis-adjacency/isis-adjacency)
+							{
+							<isis-adjacency>{
+            							<interface-name>interface-name;
+           							<system-name>system-name;
+            							<level>level;
+            							<adjacency-state>adjacency-state;
+            							<holdtime>holdtime;
+									}
+							}
+						}
+				
+				
+
+				<Restoral-fpc-pic>	{
+								 	for-each($o_fpc-pic-status/fpc)
+									{
+										<fpc>{
+											var $slot=slot;
+											<slot>slot;
+            										<state>state;
+            										<description>description;
+												for-each($o_fpc-pic-status/fpc[$slot==slot]/pic)
+												{
+													<pic>{
+                											<pic-slot>pic-slot;
+                											<pic-state>pic-state;
+                											<pic-type>pic-type;
+														}
+
+												}
+										     }
+									}
+								}
+						}
+			}
+
+	<func:result select="$content">;
+			
+}
+
+
+<func:function name="test:Diff_rsvp_interfaces">
+{
+	param $Pre_Maintainence;
+	param $Post_Maintainence;
+	expr jcs:output("\n Pre-Maintenance rsvp interfaces  : " _ count($Pre_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface));
+	expr jcs:output("\n Post-Maintenance rsvp interfaces : " _ count($Post_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface));
+	
+	for-each($Post_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface[rsvp-status!="Up"])
+	{
+		var $post-interface-name=interface-name;
+		expr jcs:output( $post-interface-name);
+		if($Pre_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface[(rsvp-status=="Up")&&(interface-name==$post-interface-name)])
+		{
+				expr jcs:output("\n Interface " _ interface-name _ " is not in \"Up\" state Post maintenance");
+		}
+	}
+
+			
+	
+}
+
+
+<func:function name="test:Diff_BFD_Session">
+{
+	param $Pre_Maintainence;
+	param $Post_Maintainence;
+	expr jcs:output("\n Pre-Maintenance BFD Sessions  : " _ count($Pre_Maintainence/Restoral/Restoral-bfd/bfd-session));
+	expr jcs:output("\n Post-Maintenance BFD Sessions : " _ count($Post_Maintainence/Restoral/Restoral-bfd/bfd-session));
+
+			
+	
+}
+
+<func:function name="test:Diff_LDP_Sessions">
+{
+	param $Pre_Maintainence;
+	param $Post_Maintainence;
+	expr jcs:output("\n Pre-Maintenance LDP Sessions  : " _ count($Pre_Maintainence/Restoral/Restoral-ldp-session/ldp-session));
+	expr jcs:output("\n Post-Maintenance LDP Sessions : " _ count($Post_Maintainence/Restoral/Restoral-ldp-session/ldp-session));
+
+			
+	
+}
+
+
+<func:function name="test:Diff_mpls_interfaces">
+{
+	param $Pre_Maintainence;
+	param $Post_Maintainence;
+	expr jcs:output("\n Pre-Maintenance mpls interfaces  : " _ count($Pre_Maintainence/Restoral/Restoral-mpls-interface/mpls-interface));
+	expr jcs:output("\n Post-Maintenance mpls interfaces : " _ count($Post_Maintainence/Restoral/Restoral-mpls-interface/mpls-interface));
+	
+	for-each($Post_Maintainence/Restoral/Restoral-mpls-interface/mpls-interface[mpls-interface-state!="Up"])
+	{
+		var $post-interface-name=interface-name;
+		expr jcs:output( $post-interface-name);
+		if($Pre_Maintainence/Restoral/Restoral-mpls-interface/mpls-interface[(mpls-interface-state=="Up")&&(interface-name==$post-interface-name)])
+		{
+				expr jcs:output("\n Interface " _ interface-name _ " is not in \"Up\" state Post maintenance");
+		}
+	}
+
+			
+	
+}
+
+<func:function name="test:Diff_int_desc">
+{
+	param $Pre_Maintainence;
+	param $Post_Maintainence;
+	
+	
+	for-each($Post_Maintainence/Restoral/Restoral-int-desc/physical-interface[(admin-status!="up")||(oper-status!="up") ])
+	{
+		var $post-interface-name	=name;
+		var $admin-status		=admin-status;
+		var $oper-status		=oper-status;	
+		
+	if($Pre_Maintainence/Restoral/Restoral-int-desc/physical-interface[((admin-status!=$admin-status)||(oper-status!=$oper-status))&&($post-interface-name==name)])
+		{
+				expr jcs:output("\n Interface " _ name _ " is not in \"Up\" state Post maintenance");
+		}
+	}
+
+			
+	
+}
+
+<func:function name="test:Diff_chassis_fpc">
+{
+	param $Pre_Maintainence;
+	param $Post_Maintainence;
+	
+	
+	for-each($Post_Maintainence/Restoral/Restoral-fpc-pic/fpc)
+	{
+		var $post-slot	=slot;
+		var $state	=state;
+		if($Pre_Maintainence/Restoral/Restoral-fpc-pic/fpc[($post-slot==slot)&&(state!=$state)])
+		{
+			expr jcs:output("The status of FPC with slot " _ $post-slot _ " changed"); 
+		}
+		for-each($Post_Maintainence/Restoral/Restoral-fpc-pic/fpc[slot==$post-slot]/pic[pic-state!="Online"])
+		{
+			var $post-pic-slot	=pic-slot;
+			var $post-pic-state	=pic-state;
+			if($Pre_Maintainence/Restoral/Restoral-fpc-pic/fpc[slot==$post-slot]/pic[(pic-slot==$post-pic-slot)&&($post-pic-state!=pic-state)])
+			{
+				expr jcs:output("The status of FPC PIC with slot " _ $post-slot _ " and PIC " _ $post-pic-slot _ " changed"); 
+			}
+			
+		}
+	}
+
+			
+	
+}
+
+
+<func:function name="test:Diff_Isis_Adjacency">
+{
+	param $Pre_Maintainence;
+	param $Post_Maintainence;
+	expr jcs:output("\n Pre-Maintenance ISIS ADJ  : " _ count($Pre_Maintainence/Restoral/Restoral-Isis/isis-adjacency));
+	expr jcs:output("\n Post-Maintenance ISIS ADJ : " _ count($Post_Maintainence/Restoral/Restoral-Isis/isis-adjacency));
+
+	for-each($Post_Maintainence/Restoral/Restoral-Isis/isis-adjacency[adjacency-state!="Up"])
+	{
+		var $post-interface-name =interface-name;
+		if($Pre_Maintainence/Restoral/Restoral-Isis/isis-adjacency[(interface-name==$post-interface-name)&&(adjacency-state=="Up")])
+		{
+			expr jcs:output("\n Interface " _ interface-name _ " is not in \"Up\" state Post maintenance");
+			
+		}
+	}		
+	
+}
+
+
+<func:function name="test:Diff_BGP_Summary">
+{
+	param 	$Pre_Maintainence;
+	param	$Post_Maintainence;
+	
+	expr jcs:output("\n Pre-Maintenance BGP sessions  : " _ count($Pre_Maintainence/Restoral/Restoral-Bgp/bgp-peer[peer-state=="Established"]));
+	expr jcs:output("\n Post-Maintenance BGP sessions : " _ count($Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[peer-state=="Established"]));
+	
+	for-each($Pre_Maintainence/Restoral/Restoral-Bgp/bgp-peer)
+	{
+		var $pre-peer-as=./peer-as;
+		var $pre-peer-state=./peer-state;
+		var $pre-description=./description;
+		
+		if($Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$pre-peer-as==peer-as])
+		{
+			var $post-peer-as	=$Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$pre-peer-as==peer-as]/peer-as;
+			var $post-peer-state	=$Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$pre-peer-as==peer-as]/peer-state;
+			var $post-description	=$Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$pre-peer-as==peer-as]/description;
+			
+			
+			if(($pre-peer-state!=$post-peer-state)||($pre-description!=$post-description))
+			{
+expr jcs:output("\n Mismatch Found");
+expr jcs:output("\n Peer-as " _ $pre-peer-as _ " with state " _ $pre-peer-state _ " and description " _ $pre-description _ " Pre-Maintenance");
+expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-state _ " and description " _ $post-description _ " Post-Maintenance");
+	
+			}
+		}
+		else
+		{
+expr jcs:output("\n Peer-as " _ $pre-peer-as _ " with state " _ $pre-peer-state _ " and description " _ $pre-description _ " is missing in Post-Maintenance BGP sessions");
+		}
+	}
+
+	for-each($Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer)
+	{
+		var $post-peer-as=./peer-as;
+		var $post-peer-state=./peer-state;
+		var $post-description=./description;
+		
+		if($Pre_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$post-peer-as==peer-as])
+		{
+			var $pre-peer-as	=$Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$post-peer-as==peer-as]/peer-as;
+			var $pre-peer-state	=$Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$post-peer-as==peer-as]/peer-state;
+			var $pre-description	=$Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$post-peer-as==peer-as]/description;
+			
+			
+			if(($pre-peer-state!=$post-peer-state)||($pre-description!=$post-description))
+			{
+expr jcs:output("\n Mismatch Found");
+expr jcs:output("\n Peer-as " _ $pre-peer-as _ " with state " _ $pre-peer-state _ " and description " _ $pre-description _ " Pre-Maintenance");
+expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-state _ " and description " _ $post-description _ " Post-Maintenance");
+	
+			}
+		}
+		else
+		{
+expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-state _ " and description " _ $post-description _ " is newly added in Post-Maintenance BGP sessions");
+		}
+	}
+}
+
+<func:function name="test:Diff_LDP_Neighbor">
+{
+	param $Pre_Maintainence;
+	param $Post_Maintainence;
+	expr jcs:output("\n Pre-Maintenance LDP neighbors  : " _ count($Pre_Maintainence/Restoral/Restoral-ldp-neighbor/ldp-neighbor));
+	expr jcs:output("\n Post-Maintenance LDP neighbors : " _ count($Post_Maintainence/Restoral/Restoral-ldp-neighbor/ldp-neighbor));
+
+			
+	
+}
+
+

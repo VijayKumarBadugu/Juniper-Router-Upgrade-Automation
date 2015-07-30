@@ -124,6 +124,13 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
             }
         }
         var $o_sysctl_bootdev = jcs:execute($connection,$sysctl_bootdev);
+	
+	if(contains($o_sysctl_bootdev,"error"))
+	{
+		expr jcs:output("\n Unable to run shell command");
+	}
+     	else
+	{
      
         if((contains($o_sysctl_bootdev,"compact-flash") && contains($o_sysctl_bootdev,"disk")))
 	{
@@ -139,7 +146,7 @@ in the bootlist  ");
             					
 	}
 
-
+	}
 /********************************************************* Traffic maintenence************************************************************/
 	expr jcs:output("\n Now removing the traffic" );
 	expr test:Continue_Prompt_Function();
@@ -212,33 +219,198 @@ in the bootlist  ");
 }
 
 
-<func:function name="test:Configuration_Xml_Saved">
+
+<func:function name="test:Tree-construct">
 {
+	var $xml_config			= <get-configuration format="xml">;
+	var $o_xml_config		= jcs:invoke($xml_config);
+	var $fpc-pic-status		= <command> "show chassis fpc pic-status";
+	var $o_fpc-pic-status		= jcs:invoke($fpc-pic-status);
+	var $get-isis-adjacency 	= <command> "show isis adjacency";
+	var $o-get-isis-adjacency 	= jcs:invoke($get-isis-adjacency);
+	var $get-bgp			= <command> "show bgp summary";
+	var $o_get-bgp			= jcs:invoke($get-bgp);
 
-	param $File_Name;
-	
-	var $xml_config		= <get-configuration format="xml">;
-	var $o_xml_config	= jcs:invoke($xml_config);
-	var $get-bgp		= <get-bgp-summary-information format="xml">;
-	var $o_get-bgp		= jcs:invoke($get-bgp);
+	var $ldp_neighbor		= <command> "show ldp neighbor";
+	var $o_ldp_neighbor		= jcs:invoke($ldp_neighbor);
 
-	var $File_Name_Xml	= $File_Name;
+	var $ldp_session		= <command> "show ldp session";
+	var $o_ldp_session		= jcs:invoke($ldp_session);
+
+	var $show_bfd			= <command> "show bfd session";
+	var $o_show_bfd			= jcs:invoke($show_bfd);
+
+	var $show_route			= <command> "show route summary";
+	var $o_show_route		= jcs:invoke($show_route);
+	var $show_chassis		= <command> "show chassis summary";
+	var $o_show_chassis		= jcs:invoke($show_chassis);
 	
-	
-	var $content = {
+	var $show_interface_des		= <command> "show interface descriptions";
+	var $o_show_interface_des	= jcs:invoke($show_interface_des);
+
+	var $show_mpls_lsp_terse	= <command> "show mpls lsp terse";
+	var $o_show_mpls_lsp_terse	= jcs:invoke($show_mpls_lsp_terse);
+
+	var $show_mpls_int		= <command> "show mpls interface";
+	var $o_show_mpls_int		= jcs:invoke($show_mpls_int);
+
+	var $show_rsvp_int		= <command> "show rsvp interface";
+	var $o_show_rsvp_int		= jcs:invoke($show_rsvp_int);
+
+
+var $content := {
 			<Restoral> {
 				<Restoral-Conf>{
 					copy-of $o_xml_config;
 					
-					
-				}
-				<Restoral-Bgp>{
-						copy-of $o_get-bgp;
 					}
 				
-				}
-			
+				<Restoral-rsvp-interface>	{
+									for-each($o_show_rsvp_int/rsvp-interface)
+									{
+										<rsvp-interface>
+											{
+            											<interface-name>interface-name;
+            											<index>index;
+            											<rsvp-status>rsvp-status;
+										}
+									}
+								}
+
+				<Restoral-mpls-interface>	{
+									for-each($o_show_mpls_int/mpls-interface)
+									{
+										<mpls-interface>{
+            										<interface-name>interface-name;
+            										<mpls-interface-state>mpls-interface-state;
+												}
+									}
+								}
+				<Restoral-int-desc>	{
+								for-each($o_show_interface_des/physical-interface)
+								{
+									<physical-interface>{
+            									<name>name;
+            									<admin-status>admin-status;            											<oper-status>oper-status;
+            									<description>description;
+											}
+								}
+									
+							}
+
+				<Restoral-bfd>	{
+							for-each($o_show_bfd/bfd-session)
+							{
+							<bfd-session>{
+            							<session-neighbor>session-neighbor;
+            							<session-state>session-state;
+            							<session-interface>session-interface;
+            							<session-detection-time>session-detection-time;
+            							<session-transmission-interval>session-transmission-interval;
+            							<session-adaptive-multiplier>session-adaptive-multiplier;
+					
+								}
+							}
+						}
+				
+				<Restoral-ldp-session>	{
+								for-each($o_ldp_session/ldp-session)
+								{
+									<ldp-session>{
+            									<ldp-neighbor-address>ldp-neighbor-address;
+            									<ldp-session-state>ldp-session-state;
+            									<ldp-connection-state>ldp-connection-state;
+            									<ldp-remaining-time>ldp-remaining-time;
+            									<ldp-session-adv-mode>ldp-session-adv-mode;
+							
+										}
+								}
+									
+							}
+
+				<Restoral-ldp-neighbor>	{
+								for-each($o_ldp_neighbor/ldp-neighbor)
+								{
+									 <ldp-neighbor>{
+            									<ldp-neighbor-address>ldp-neighbor-address;
+            									<interface-name>interface-name;
+            									<ldp-label-space-id>ldp-label-space-id;
+            									<ldp-remaining-time>ldp-remaining-time;
+											}
+								}
+									
+							}
+
+				<Restoral-Bgp>	{
+								for-each($o_get-bgp/bgp-peer)
+								{
+									<bgp-peer>{
+											<peer-as>peer-as;
+											<peer-state>peer-state;
+											<description>description;
+										}
+								}
+									
+									
+								
+						}
+				<Restoral-Isis>	{
+							for-each($o-get-isis-adjacency/isis-adjacency)
+							{
+							<isis-adjacency>{
+            							<interface-name>interface-name;
+           							<system-name>system-name;
+            							<level>level;
+            							<adjacency-state>adjacency-state;
+            							<holdtime>holdtime;
+									}
+							}
+						}
+				
+				
+
+				<Restoral-fpc-pic>	{
+								 	for-each($o_fpc-pic-status/fpc)
+									{
+										<fpc>{
+											var $slot=slot;
+											<slot>slot;
+            										<state>state;
+            										<description>description;
+												for-each($o_fpc-pic-status/fpc[$slot==slot]/pic)
+												{
+													<pic>{
+                											<pic-slot>pic-slot;
+                											<pic-state>pic-state;
+                											<pic-type>pic-type;
+														}
+
+												}
+										     }
+									}
+								}
+						}
 			}
+
+	<func:result select="$content">;
+			
+}
+
+
+
+<func:function name="test:Configuration_Xml_Saved">
+{
+
+	param $File_Name;
+	var $File_Name_Xml=$File_Name;
+	var $content=test:Tree-construct();
+
+
+	
+	
+	
+
+	 		
 	
 
 	
@@ -803,7 +975,7 @@ template Traffic_Removal_Function()
 
 	
 	
-	for-each($O_Bgp_Config/protocols/bgp/group[not(starts-with(peer-as,"64")||starts-with(peer-as,"65")||starts-with(peer-as,"61")||starts-with(peer-as,"62"))])
+	for-each($O_Bgp_Config/protocols/bgp/group[(type=="external")&&(not(starts-with(peer-as,"64")||starts-with(peer-as,"65")||starts-with(peer-as,"61")||starts-with(peer-as,"62")))])
 	{
 	expr jcs:output("\n Now deactivating bgp group " _ name _ " with peer-as " _ peer-as);
 			var $bgp_group_de-activate_configuration={

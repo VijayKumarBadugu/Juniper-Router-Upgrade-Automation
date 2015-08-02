@@ -98,18 +98,32 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 
 	var $Show_System_Storage	= <command> "show system storage";
 	var $O_Show_System_Storage	= jcs:invoke($Show_System_Storage);
+	var $Com-Mounted-on	= "Test" _ "/";
 	
-	if(($O_Show_System_Storage/filesystem[contains(filesystem-name,"ad0") && (mounted-on=="/")]))
+	
+	if($O_Show_System_Storage/filesystem[contains(filesystem-name,"ad0")])
 	{
-		expr jcs:output("\n File system " _ filesystem-name _ "mounted-on" _ mounted-on);
-		expr jcs:output("\n The router is properly booted from flash disk ");
+		var $Mounted-on		= "Test" _ $O_Show_System_Storage/filesystem[contains(filesystem-name,"ad0")]/mounted-on;
+		var $File-system-name	= $O_Show_System_Storage/filesystem[contains(filesystem-name,"ad0")]/filesystem-name;
+	
+		if( $Mounted-on==$Com-Mounted-on)
+		{
+			expr jcs:output("\n File system " _ $File-system-name _ " mounted-on " _ substring($Mounted-on,5,5));
+			expr jcs:output("\n The router is properly booted from flash disk ");
+			expr test:Continue_Prompt_Function();
+		}
+		else
+		{
+			expr jcs:output("\n File system " _ $File-system-name _ " mounted-on " _ substring($Mounted-on,5,5));
+			expr jcs:output("\n The router is not properly booted from flash disk .Please quit and debug the issue before the software upgrade");
+			expr test:Quit_Prompt_Function();
+		}
 	}
 	else
 	{
-		expr jcs:output("\n The router is not properly booted from flash disk .Please quit and debug the issue before the software upgrade");
+		expr jcs:output(" The ad0 file system is not present .Please quit and debug the issue before the software upgrade");
 		expr test:Quit_Prompt_Function();
 	}
-
 
 /**************************************Ensure the “compact flash” and “disk” are in the bootlist:*****************************************/
 
@@ -220,6 +234,8 @@ in the bootlist  ");
 
 
 
+
+
 <func:function name="test:Tree-construct">
 {
 	var $xml_config			= <get-configuration format="xml">;
@@ -257,6 +273,9 @@ in the bootlist  ");
 	var $show_rsvp_int		= <command> "show rsvp interface";
 	var $o_show_rsvp_int		= jcs:invoke($show_rsvp_int);
 
+	var $show_chassis_alarms	= <command> "show chassis alarms";
+	var $o_show_chassis_alarms	= jcs:invoke($show_chassis_alarms);
+
 
 var $content := {
 			<Restoral> {
@@ -264,6 +283,65 @@ var $content := {
 					copy-of $o_xml_config;
 					
 					}
+				<Restoral-route-summary>{
+
+
+							for-each($o_show_route/route-table)
+							{
+								<route-table>
+								{
+            								<table-name>table-name;
+            								<destination-count>destination-count;
+            								<total-route-count>total-route-count;
+								}
+
+							}
+						
+							}
+				<Restoral-mpls-terse>{
+							for-each($o_show_mpls_lsp_terse/rsvp-session-data)
+							{
+								<rsvp-session-data>
+									{
+            									<session-type>session-type;
+            									<count>count;
+           	 								<display-count>display-count;
+            									<up-count>up-count;
+            									<down-count>down-count;
+									}
+							
+							}
+
+
+
+
+						    }
+				<Restoral-Chassis-alarms>{
+								for-each($o_show_chassis_alarms/alarm-summary)
+								{
+									 <alarm-summary>{
+            									<active-alarm-count>active-alarm-count;
+											}
+								}
+								
+								for-each($o_show_chassis_alarms/alarm-detail)
+								{
+									<alarm-detail>{
+            
+            									<alarm-class>alarm-class;
+            									<alarm-description>alarm-description;
+            									<alarm-short-description>alarm-short-description;
+            									<alarm-type>alarm-type;
+											}
+
+								}
+
+
+
+
+								
+							}
+							
 				
 				<Restoral-rsvp-interface>	{
 									for-each($o_show_rsvp_int/rsvp-interface)
@@ -398,6 +476,7 @@ var $content := {
 
 
 
+
 <func:function name="test:Configuration_Xml_Saved">
 {
 
@@ -446,6 +525,28 @@ var $content := {
 	expr test:Routing_Engine_File_Transfer("/var/home/full/" _ $File_Name_Xml,test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_Name_Xml);
 }
 
+<func:function name="test:File_Finder_BackUp">
+{
+	param $File_name;
+	var $Code_path_file		= test:Other_Routing_Engine_Finder() _ ":/var/home/full/";
+	expr jcs:output("\n Searching for code file if exists on router at " _ $Code_path_file);
+	var $File_Search		=  <file-list>{			
+						<path> $Code_path_file;
+					}
+	var $O_File_Search		= jcs:invoke($File_Search);
+	
+
+	if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-information[file-name==$File_name])
+	{
+		var $Result="yes";
+		<func:result select="$Result">;
+	}
+	else
+	{
+		var $Result="no";
+		<func:result select="$Result">;
+	}
+}
 
 
 <func:function name="test:File_Finder">
@@ -500,7 +601,7 @@ var $content := {
 			{
 				expr jcs:output("\n Checking the Image file whether it is present in the backup routing engine");
 				var $Source_File 	= "/var/home/full/" _ $Image_File;
-				if(test:File_Finder() == "no")
+				if(test:File_Finder_BackUp($Image_File) == "no")
 				{
 					
 					var $Destination_File	= test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $Image_File;
@@ -662,7 +763,7 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 
 <func:function name="test:FTP_Config_Path_Finder">
 {
-	var $FTP_Config_option	= jcs:get-input("\n Is the file at /prod/img directory at FTP server ");
+	var $FTP_Config_option	= jcs:get-input("\n Is the file at /prod/img directory at FTP server (yes/no) ");
 	if($FTP_Config_option=="yes")
 	{
 		var $FTP_Config_path= "/prod/img/";
@@ -832,10 +933,10 @@ template Traffic_Removal_Function()
 	var $show_aps		= <command> "show aps";
 	var $o_show_aps		= jcs:invoke($show_aps);
 
-	if( ($o_show_aps/Interface)&&($o_show_aps) && not(($o_show_aps//self::xnm:warning)||($o_show_aps//self::xnm:error)))
+	if( ($o_show_aps/aps-interface)&&($o_show_aps) && not(($o_show_aps//self::xnm:warning)||($o_show_aps//self::xnm:error)))
 	{
 		expr jcs:output("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
-		expr test:Continue_Prompt_Function();
+		expr test:Quit_Prompt_Function();
 	}
 
 /**********************************************  *********************************************************************************/
@@ -859,7 +960,7 @@ template Traffic_Removal_Function()
 	{
 		
 			expr jcs:output("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
-			expr test:Continue_Prompt_Function();			
+			expr test:Quit_Prompt_Function();			
 		
 			
 	}
@@ -875,7 +976,7 @@ template Traffic_Removal_Function()
 	if($o_show_bfd/bfd-session[starts-with(session-neighbor,152)])
 	{
 			expr jcs:output("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
-			expr test:Continue_Prompt_Function();	
+			expr test:Quit_Prompt_Function();	
 		
 	}
 	
@@ -889,10 +990,10 @@ template Traffic_Removal_Function()
 	var $show_vrrp 		= <command> "show vrrp";
 	var $o_show_vrrp 	= jcs:invoke($show_vrrp);
 	
-	if( ($o_show_vrrp) && not(($o_show_vrrp//self::xnm:warning)||($o_show_vrrp//self::xnm:error)) ) 
+	if( ($o_show_vrrp) &&($o_show_vrrp/vrrp-interface) && not(($o_show_vrrp//self::xnm:warning)||($o_show_vrrp//self::xnm:error)) ) 
 	{
 		expr jcs:output("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)");
-		expr test:Continue_Prompt_Function();
+		expr test:Quit_Prompt_Function();
 	}
 
 	
@@ -905,7 +1006,7 @@ template Traffic_Removal_Function()
 	var $show_l2connect 	= <command> "show l2circuit connections";
 	var $o_show_l2connect 	= jcs:invoke($show_l2connect);
 	 
-	if( ($o_show_l2connect/Neighbor)&&($o_show_l2connect) && not(($o_show_l2connect//self::xnm:warning)||($o_show_l2connect//self::xnm:error)) ) 
+	if( ($o_show_l2connect/l2circuit-neighbor)&&($o_show_l2connect) && not(($o_show_l2connect//self::xnm:warning)||($o_show_l2connect//self::xnm:error)) ) 
 	{
 		expr jcs:output("\n Look like it is XT1.SAC1 or XT2.HOU7 router ? ");
 		expr test:Continue_Prompt_Function();
@@ -993,6 +1094,8 @@ template Traffic_Removal_Function()
 		call jcs:load-configuration( $connection, $configuration = $bgp_group_de-activate_configuration);
 		
 	}
+/********************************************** Wait for krt Queue ******************************************************/
+	expr test:Show_KRT_Queue();
 
 	expr jcs:output("\n ===========> show isis database | match overload | match “XT|XL|BB|TL");
 	expr test:Continue_Prompt_Function();

@@ -16,6 +16,7 @@ match / {
 	
 	expr jcs:output("\n \n Welcome to Router Upgradation MOP ");
 	expr jcs:output("\n This script removes the traffic and sets the router in overload ");
+	expr test:Continue_Prompt_Function();
 	
 	var $File_name		= test:File_Name_Creater();
 
@@ -23,8 +24,7 @@ match / {
 
 /************************************** Checking whether script is being re run ****************************************************/
 
-	expr jcs:output("\n Saving the router configuration at /var/home/full/" _ $File_name);
-	expr test:Continue_Prompt_Function();
+	
 
 	if(test:File_Finder($File_name _ ".xml")=="yes")
 	{
@@ -32,6 +32,10 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 	expr test:Quit_Prompt_Function();
 	}
 
+/************************************** Saving the configuration at /var/home/full/  ****************************************************/
+
+	expr jcs:output("\n Do you want to save the configuration at /var/home/full/" _ $File_name _ " ?");
+	expr test:Continue_Prompt_Function();
 
 	
 	var $Save_Configuration 	= <get-configuration format="text"> ;
@@ -58,7 +62,7 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 
 /**************************************Saving the config at backup routing engine ****************************************************/
 	
-	expr jcs:output("\n Transfering the configuration to back up routing engine");
+	expr jcs:output("\n Do you want to save the configuration in back-up routing engine at /var/home/full/" _ $File_name _ " ?");
 	expr test:Continue_Prompt_Function();
 		
 	expr test:Routing_Engine_File_Transfer("/var/home/full/" _ $File_name,test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_name);
@@ -66,7 +70,7 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 
 /**************************************Transferring the config file to FTP server FTP****************************************************/
 
-	expr jcs:output("\n Saving the configuration to the FTP server" );
+	expr jcs:output("\n Do you want to save the configuration in the FTP server ?" );
 	expr test:Continue_Prompt_Function();
 
 	expr test:FTP_File_Transfer("/var/home/full/" _ $File_name,$File_name);
@@ -83,8 +87,8 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 
 /**************************Searching for the install file and dowloading from back up if not present*************************************/
 /****************************************************************************************************************************************/
-	expr jcs:output("\n Searching for all the available software image in the local disk" );
-	expr test:Continue_Prompt_Function();
+	/*expr jcs:output("\n Searching all  software image in the local disk /var/home/full/" );*/
+	
 
 	var $Image_File_Path 		= test:Search_Image_File();
 	expr jcs:output("\n The Final file is " _ 	$Image_File_Path);
@@ -93,7 +97,7 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 
 /***********************************************show system storage***********************************************************************/
 
-	expr jcs:output("\n Checking whether the router is properly booted from flash disk" );
+	expr jcs:output("\n Do you want to check whether the router is properly booted from flash disk ?" );
 	expr test:Continue_Prompt_Function();
 
 	var $Show_System_Storage	= <command> "show system storage";
@@ -110,7 +114,7 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 		{
 			expr jcs:output("\n File system " _ $File-system-name _ " mounted-on " _ substring($Mounted-on,5,5));
 			expr jcs:output("\n The router is properly booted from flash disk ");
-			expr test:Continue_Prompt_Function();
+			
 		}
 		else
 		{
@@ -127,7 +131,7 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 
 /**************************************Ensure the “compact flash” and “disk” are in the bootlist:*****************************************/
 
-	expr jcs:output("\n Checking whether “compact flash” and “disk” are in the bootlist" );
+	expr jcs:output("\n Do you want to check whether “compact flash” and “disk” are in the bootlist ? " );
 	expr test:Continue_Prompt_Function();
 
 	var $connection = jcs:open();
@@ -142,6 +146,8 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 	if(contains($o_sysctl_bootdev,"error"))
 	{
 		expr jcs:output("\n Unable to run shell command");
+		expr jcs:output(" Please run \"sysctl -a | grep bootdevs\" to check whether \"compact flash\" and \"disk\" are in the bootlist");
+		expr test:Quit_Prompt_Function();
 	}
      	else
 	{
@@ -162,7 +168,7 @@ in the bootlist  ");
 
 	}
 /********************************************************* Traffic maintenence************************************************************/
-	expr jcs:output("\n Now removing the traffic" );
+	expr jcs:output("\n Do you want to save the Pre Maintenence state at /var/home/full/" _ $File_name _ ".xml");
 	expr test:Continue_Prompt_Function();
 
 	
@@ -173,45 +179,60 @@ in the bootlist  ");
 
 /*********************************************************request system snapshot*********************************************************/
 
-	expr jcs:output("\n Executing request system snapshot " );
+	expr jcs:output("\n Do you want to run \"request system snapshot\" ? " );
 	expr test:Continue_Prompt_Function();
 
 	var $request_system_snapshot	= <command> "request system snapshot";
 	var $o_request_system_snapshot	= jcs:invoke($request_system_snapshot);
+	
 	if($o_request_system_snapshot//self::xnm:error || $o_request_system_snapshot//self::xnm:warning)
 	{
-		expr jcs:output("\n The software and configuration are not archived onto the /altroot and /altconfig file systems ");
-		expr jcs:output("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
+		expr jcs:output("\n Error in executing request system snap shot ");
+		expr jcs:output("\n Please Quit this quit and activate the traffic using restoral.slax script");
 		expr test:Quit_Prompt_Function();
-	}
-	else
-	{
-		expr jcs:output("\n The software and configuration are archived onto the /altroot and /altconfig file systems ");
-	}
-
-/*********************************************************routing engine switch*********************************************************/
-
-	expr jcs:output("\n Checking whether re0 is the master routing engine switch " );
-	expr test:Continue_Prompt_Function();
-
-	var $Routing_Engine_Checker	= <command> " show chassis routing-engine ";
-	var $O_Routing_Engine_Checker	= jcs:invoke($Routing_Engine_Checker);
-	
-	if($O_Routing_Engine_Checker/route-engine[(slot=="0")&&(mastership-state=="master")])
-	{
-		expr jcs:output("\n Re0 is Configured as Master. Good to go ");	
-	}
-	else
-	{
-		expr jcs:output("\n Re0 is not configured as Master! ");
-		expr test:Routing_Engine_Membership();
 		
 	}
+	else
+	{
+		var $Comp	= "/config";
+		var $Comp_var	= substring($Comp,1,1);
+		
+		
+		if(($o_request_system_snapshot/archived-directory-list[directory-name=="/config"]))
+		{
+			if($o_request_system_snapshot/archived-directory-list[directory-name==$Comp_var])
+			{
+				expr jcs:output("\n The software and configuration are archived onto the /altroot and /altconfig file systems ");
+			}
+			else
+			{
+				expr jcs:output("\n The software and configuration are not archived onto the /altroot ");
+				expr jcs:output("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
+				expr test:Quit_Prompt_Function();
+			}
+		}
+		else
+		{
+			expr jcs:output("\n The software and configuration are not archived onto the /altconfig file systems ");
+			expr jcs:output("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
+			expr test:Quit_Prompt_Function();
+			
+		}
+	}
+
+/*********************************************************request system snapshot other routing engine*********************************************************/
+
+	expr jcs:output("\n Do you want to run \"request system snapshot\" at other routing engine ? " );
+	expr test:Continue_Prompt_Function();
+	expr test:snapshot_other_routing_engine();
+
+
 
 /****************************************************************************************************************/
 	
-	expr jcs:output("\n Please use following command to upgrade routing engines");
-	expr jcs:output("\n request system software add " _ $Image_File_Path _ " reboot");
+	expr jcs:output("\n Please use following commands to upgrade routing engines");
+	expr jcs:output("\n request system software add " _ $Image_File_Path _ " re0 reboot");
+	expr jcs:output("\n request system software add " _ $Image_File_Path _ " re1 reboot");
 	expr jcs:output("\n The xml configuration file is stored at /var/home/full/" _ $File_name _ ".xml");
 	expr jcs:output("\n Please use Traffic_Restoral.slax to restore the traffic");
 
@@ -220,6 +241,52 @@ in the bootlist  ");
 	
 
 }
+
+
+
+
+<func:function name="test:snapshot_other_routing_engine">
+{
+	var $request_system_snapshot	= <command> "request system snapshot routing-engine other";
+	var $o_request_system_snapshot	= jcs:invoke($request_system_snapshot);
+	
+	if($o_request_system_snapshot//self::xnm:error || $o_request_system_snapshot//self::xnm:warning)
+	{
+		expr jcs:output("\n Error in executing request system snap shot ");
+		expr jcs:output("\n Please Quit this quit and activate the traffic using restoral.slax script");
+		expr test:Quit_Prompt_Function();
+		
+	}
+	else
+	{
+		var $Comp	= "/config";
+		var $Comp_var	= substring($Comp,1,1);
+		
+		
+		if(($o_request_system_snapshot/multi-routing-engine-item/snapshot-information/archived-directory-list[directory-name=="/config"]))
+		{
+			if($o_request_system_snapshot/multi-routing-engine-item/snapshot-information/archived-directory-list[directory-name==$Comp_var])
+			{
+				expr jcs:output("\n The software and configuration are archived onto the /altroot and /altconfig file systems ");
+			}
+			else
+			{
+				expr jcs:output("\n The software and configuration are not archived onto the /altroot ");
+				expr jcs:output("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
+				expr test:Quit_Prompt_Function();
+			}
+		}
+		else
+		{
+			expr jcs:output("\n The software and configuration are not archived onto the /altconfig file systems ");
+			expr jcs:output("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
+			expr test:Quit_Prompt_Function();
+			
+		}
+	}
+
+}
+
 
 <func:function name="test:View_System_Running">
 {
@@ -763,7 +830,7 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 
 <func:function name="test:FTP_Config_Path_Finder">
 {
-	var $FTP_Config_option	= jcs:get-input("\n Is the file at /prod/img directory at FTP server (yes/no) ");
+	var $FTP_Config_option	= jcs:get-input("\n Do you want to save file in /prod/img directory at FTP server (yes/no) ? ");
 	if($FTP_Config_option=="yes")
 	{
 		var $FTP_Config_path= "/prod/img/";
@@ -833,8 +900,8 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 		expr jcs:output("\n File transfered successfully ! ");
 	}
 	
-	expr jcs:output("\n Source File : " _ $Source_File);
-	expr jcs:output("\n Destination File : " _ $Destination_File);
+	/*expr jcs:output("\n Source File : " _ $Source_File);
+	expr jcs:output("\n Destination File : " _ $Destination_File);*/
 }
 
 
@@ -886,9 +953,9 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 
 <func:function name="test:Quit_Prompt_Function">
 {
-	expr jcs:output("\n Please Choose \"yes\"  [to Quit], \"continue\" [to continue], \"show\" [show command]");
+	expr jcs:output("\n Please Choose \"quit\"  [to Quit], \"continue\" [to continue], \"show\" [show command]");
 	var $var = jcs:get-input( " Enter : " );
-	if($var=="yes")     
+	if($var=="quit")     
 	{ 
 	  		<xsl:message terminate="yes"> "Aborting the script";
 	} 
@@ -924,7 +991,7 @@ template Traffic_Removal_Function()
 	
 
 
-	expr jcs:output("\n ===========> Running show aps");
+	expr jcs:output("\n Do you want to run the command \" show aps\" ?");
 	
 	expr test:Continue_Prompt_Function();
 
@@ -944,7 +1011,7 @@ template Traffic_Removal_Function()
 
 	
 
-	expr jcs:output("\n ===========> show bgp summary| match 1661");
+	expr jcs:output("\n Do you want to run the command \" show bgp summary| match 1661 \" ?");
 	expr test:Continue_Prompt_Function();
 	
 	
@@ -965,7 +1032,7 @@ template Traffic_Removal_Function()
 			
 	}
  
-	expr jcs:output("\n ===========> show bfd session | match ^152");
+	expr jcs:output("\n Do you want to run the command \"show bfd session | match ^152\" ?");
 	expr test:Continue_Prompt_Function();
 
 /********************************************** show bfd session | match ^152 ************************************************************/
@@ -982,7 +1049,7 @@ template Traffic_Removal_Function()
 	
 	
 	
-	expr jcs:output("\n ===========> show vrrp");
+	expr jcs:output("\n Do you want to run the command \" show vrrp \" ?");
 	expr test:Continue_Prompt_Function();
 
 /********************************************** show vrrp ********************************************************************************/
@@ -998,7 +1065,7 @@ template Traffic_Removal_Function()
 
 	
 
-	expr jcs:output("\n ===========> show l2circuit connections");
+	expr jcs:output("\n Do you want to run the command \"show l2circuit connections\" ? ");
 	expr test:Continue_Prompt_Function();
 
 /********************************************** show l2circuit connections ***************************************************************/
@@ -1012,7 +1079,7 @@ template Traffic_Removal_Function()
 		expr test:Continue_Prompt_Function();
 	}
 
-	expr jcs:output("\n ===========> show mpls lsp | match sig");
+	expr jcs:output("\n Do you want to run the command \" show mpls lsp | match sig \" ?");
 	expr test:Continue_Prompt_Function();
 
 /********************************************** show mpls lsp | match sig ****************************************************************/
@@ -1067,7 +1134,7 @@ template Traffic_Removal_Function()
 	}
 
 	var $connection = jcs:open();
-	expr jcs:output("\n ===========> Deactivating External BGP Neighbors");
+	expr jcs:output("\n Do you want to Deactivate External BGP ?");
 	expr test:Continue_Prompt_Function();
 /********************************************** Deactivating External BGP Neighbors ******************************************************/
 
@@ -1097,7 +1164,7 @@ template Traffic_Removal_Function()
 /********************************************** Wait for krt Queue ******************************************************/
 	expr test:Show_KRT_Queue();
 
-	expr jcs:output("\n ===========> show isis database | match overload | match “XT|XL|BB|TL");
+	expr jcs:output("\n Do you want to run the command \" show isis database | match overload | match “XT|XL|BB|TL \" ?");
 	expr test:Continue_Prompt_Function();
 
 /**************************************show isis database | match overload | match “XT|XL|BB|TL*******************************************/
@@ -1139,7 +1206,7 @@ template Traffic_Removal_Function()
 
 
 
-	expr jcs:output("\n ===========> set protocols isis overload");
+	expr jcs:output("\n Do you want set protocols isis overload ?");
 	expr test:Continue_Prompt_Function();
 
 /********************************************** set protocols isis overload **************************************************************/
@@ -1169,7 +1236,7 @@ template Traffic_Removal_Function()
 	call jcs:load-configuration( $connection, $configuration =$isis_time_configuration);	
 	call jcs:load-configuration( $connection, $configuration =$isis_configuration);
 
-	expr jcs:output("\n ===========> deactivate bgp protocols");
+	expr jcs:output("\n Do you want deactivate bgp protocols ?");
 	expr test:Continue_Prompt_Function();
 	
 /********************************************** deactivate bgp protocols *****************************************************************/
@@ -1191,7 +1258,7 @@ template Traffic_Removal_Function()
 	expr test:Show_KRT_Queue();
 
 
-	expr jcs:output("\n ===========> deactivate protocols");
+	expr jcs:output("\n Do you want deactivate protocols ?");
 	
 	
 	expr test:Continue_Prompt_Function();
@@ -1211,7 +1278,7 @@ template Traffic_Removal_Function()
 	
 	
 
-	expr jcs:output("\n ===========> deactivate routing-options");
+	expr jcs:output("\n Do you want to deactivate routing-options ?");
 	expr test:Continue_Prompt_Function();
 
 /********************************************** deactivate routing-options *********************************************************************/
@@ -1225,7 +1292,7 @@ template Traffic_Removal_Function()
 
 
 	
-	expr jcs:output("\n ===========> deactivate chassis redundancy");
+	expr jcs:output("\n Do you want to deactivate chassis redundancy ?");
 	expr test:Continue_Prompt_Function();
 
 /********************************************** deactivate chassis redundancy *********************************************************************/
@@ -1241,7 +1308,7 @@ template Traffic_Removal_Function()
 	call jcs:load-configuration( $connection, $configuration =$chassis_redundancy_deactivate);
 
 
-	expr jcs:output("\n ===========> deactivate routing-instances");
+	expr jcs:output("\n Do you want to deactivate routing-instances ?");
 	expr test:Continue_Prompt_Function();
 
 /********************************************** deactivate routing-instances *********************************************************************/

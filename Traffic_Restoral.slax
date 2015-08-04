@@ -23,6 +23,46 @@ match / {
 	
 	expr test:software_version();
 	expr test:Continue_Prompt_Function();
+	expr test:software_version_other_routing_engine();
+	expr test:Continue_Prompt_Function();
+/*********************************************************routing engine switch*********************************************************/
+
+	expr jcs:output("\n Do you want to check whether re0 is the master routing engine switch ? " );
+	expr test:Continue_Prompt_Function();
+
+	var $Routing_Engine_Checker	= <command> " show chassis routing-engine ";
+	var $O_Routing_Engine_Checker	= jcs:invoke($Routing_Engine_Checker);
+	
+	if($O_Routing_Engine_Checker/route-engine[(slot=="0")&&(mastership-state=="master")])
+	{
+		expr jcs:output("\n Re0 is Configured as Master. Good to go ");	
+	}
+	else
+	{
+		expr jcs:output("\n Re0 is not configured as Master! ");
+		expr jcs:output(" Do you want to run the command \" request chassis routing-engine master switch \" ?");
+		expr test:Continue_Prompt_Function();
+		
+		var $Switch 	= <command> "request chassis routing-engine master switch";
+		var $O_Switch 	= jcs:invoke($Switch);
+		var $O_Recheck_Routing_Engine_Checker	= jcs:invoke($Routing_Engine_Checker);
+		
+		if($O_Recheck_Routing_Engine_Checker/route-engine[(slot=="0")&&(mastership-state=="master")])
+		{
+			expr jcs:output("\n Re0 is Configured as Master ");	
+		}
+		else
+		{
+			expr jcs:output("\n Re0 is not configured as Master! ");
+			expr test:Quit_Prompt_Function();
+			
+		}
+		
+		
+		
+		
+	}
+
 
 /********************************************** search for xml restoral file ***************************************************************/
 	var $File_name		= "/var/home/full/" _ test:Check_if_File_Exits();
@@ -35,7 +75,7 @@ match / {
 
 	
 
-	expr jcs:output("===========> activate routing-instances");
+	expr jcs:output("Do you want to activate routing-instances ?");
 	expr test:Continue_Prompt_Function();
 	
 /********************************************** activate routing-instances ****************************************************************/
@@ -53,7 +93,7 @@ match / {
 	}
 
 
-	expr jcs:output("===========> activate routing-options");
+	expr jcs:output("Do you want to activate routing-options ?");
 	expr test:Continue_Prompt_Function();
 
 /********************************************** activate routing-options *********************************************************************/
@@ -69,7 +109,7 @@ match / {
 	
 	
 
-	expr jcs:output("===========> activate chassis redundancy");
+	expr jcs:output("Do you want to activate chassis redundancy ?");
 	expr test:Continue_Prompt_Function();
 
 /********************************************** activate chassis redundancy ***********************************************************************/
@@ -83,7 +123,7 @@ match / {
 							}
 	call jcs:load-configuration( $connection, $configuration =$chassis_redundancy_activate);
 	
-	expr jcs:output("===========> activate protocols");
+	expr jcs:output("Do you want to activate protocols ?");
 	expr test:Continue_Prompt_Function();
 
 /********************************************** activate protocols ***********************************************************************/
@@ -99,7 +139,7 @@ match / {
 /********************************************** Wait for krt Queue ******************************************************/
 	expr test:Show_KRT_Queue();
 /********************************************** Wait for krt Queue ******************************************************/	
-	expr jcs:output("===========> activate bgp");
+	expr jcs:output("Do you want to activate bgp ?");
 	expr test:Continue_Prompt_Function();
 
 /********************************************** activate bgp *****************************************************************************/
@@ -119,7 +159,7 @@ match / {
 	expr test:Show_KRT_Queue();
 /********************************************** Wait for krt Queue ******************************************************/
 
-	expr jcs:output("===========> delete protocols isis overload");
+	expr jcs:output(" Do you want to  delete protocols isis overload ?");
 	expr test:Continue_Prompt_Function();
 
 /********************************************** delete protocols isis overload ***********************************************************/
@@ -137,7 +177,7 @@ match / {
 		   	 }
 		call jcs:load-configuration( $connection, $configuration =$isis_delete_configuration);
 
-		expr jcs:output("===========> set protocols isis overload timeout 600");
+		expr jcs:output("Do you want to  set protocols isis overload timeout 600 ?");
 		expr test:Continue_Prompt_Function();
 
 /********************************************** set protocols isis overload timeout 600  *************************************************/
@@ -158,7 +198,7 @@ match / {
 	}
 
 
-	expr jcs:output("===========> activate group <GROUP_NAME>");
+	expr jcs:output("Do you want to activate External BGP ? ");
 	expr test:Continue_Prompt_Function();
 
 /********************************************** activate group <GROUP_NAME>  *************************************************/
@@ -224,7 +264,6 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[(type=="external")&&(not(star
 	expr jcs:output("*****************************************************************");
 	expr test:Diff_Isis_Adjacency($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show bgp summary");
-	expr jcs:output("*****************************************************************");
 	expr test:Diff_BGP_Summary($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show ldp neighbor");
 	expr jcs:output("*****************************************************************");
@@ -1016,7 +1055,7 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 			
 		}
 	}
-	expr jcs:output(" Queue is Empty");
+	expr jcs:output(" KRT Queue is Empty ");
 	if($Perfect==1)
 	{
 			
@@ -1084,6 +1123,24 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	
 }
 
+<func:function name="test:software_version_other_routing_engine">
+{
+	var $Show_Version	= <command> "show version invoke-on other-routing-engine";
+	var $O_Show_Version	= jcs:invoke($Show_Version);
+	if($O_Show_Version/multi-routing-engine-item/software-information/junos-version)
+	{
+		expr jcs:output("\n The version of the other-routing-engine is " _ $O_Show_Version/multi-routing-engine-item/software-information/junos-version);
+	}
+	else
+	{
+		if($O_Show_Version/multi-routing-engine-item/software-information/package-information/comment)
+		{
+			expr jcs:output("\n The version of the other-routing-engine is " _ $O_Show_Version/multi-routing-engine-item/software-information/package-information/comment);
+		}
+	}
+	
+}
+
 
 <func:function name="test:Check_if_File_Exits">
 {
@@ -1092,7 +1149,7 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	if(test:File_Finder($File_Name)=="no")
 	{
 		expr jcs:output("\n You don't have the restoral in local disk");
-		expr jcs:output("\n You need to download the xml file from FTP server");
+		expr jcs:output("\n You may have to specify the file name in local disk or download from FTP server");
 		var $Restoral_File	=test:Restoral_File_Finder();
 		<func:result select="$Restoral_File">;
 	
@@ -1149,8 +1206,18 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	var $Option	= jcs:get-input("\n Is the file present in local disk (yes/no) ");
 	if($Option=="yes")
 	{
-		var $Restoral_xml_file		= jcs:get-input("\n Please enter the xml file name with path of the xml configuration file "); 
-		<func:result select="$Restoral_xml_file">;
+		var $Restoral_xml_file		= jcs:get-input("\n Please enter the xml file name that is present in /var/home/full/ ");
+		var $Result			= test:File_Finder($Restoral_xml_file);
+		if($Result=="yes")
+		{
+			<func:result select="$Restoral_xml_file">;
+		}
+		else
+		{
+			var $Retry_Restoral_xml_file		= test:Restoral_File_Finder();
+			<func:result select="$Retry_Restoral_xml_file">;
+			
+		}
 	}
 	else
 	{

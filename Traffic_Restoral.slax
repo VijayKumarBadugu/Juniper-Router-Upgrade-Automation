@@ -20,6 +20,10 @@ match / {
 
 	var $connection = jcs:open();
 /********************************************** show software of the system ***************************************************************/
+	var $Routing_Engine_Checker	= <command> " show chassis routing-engine ";
+	var $O_Routing_Engine_Checker	= jcs:invoke($Routing_Engine_Checker);
+	
+	
 	
 	expr test:software_version();
 	expr test:Continue_Prompt_Function();
@@ -27,21 +31,20 @@ match / {
 	expr test:Continue_Prompt_Function();
 /*********************************************************routing engine switch*********************************************************/
 
-	expr jcs:output("\n Do you want to check whether re0 is the master routing engine switch ? " );
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to check whether re0 is the master routing engine switch ? " );
 
-	var $Routing_Engine_Checker	= <command> " show chassis routing-engine ";
-	var $O_Routing_Engine_Checker	= jcs:invoke($Routing_Engine_Checker);
+	
 	
 	if($O_Routing_Engine_Checker/route-engine[(slot=="0")&&(mastership-state=="master")])
 	{
-		expr jcs:output("\n Re0 is Configured as Master. Good to go ");	
+		expr jcs:output("\n Re0 is Configured as Master.");	
 	}
 	else
 	{
 		expr jcs:output("\n Re0 is not configured as Master! ");
-		expr jcs:output(" Do you want to run the command \" request chassis routing-engine master switch \" ?");
-		expr test:Continue_Prompt_Function();
+		
+		expr test:Continue_Prompt_Function(" Do you want to run the command \" request chassis routing-engine master switch \" ?");
 		
 		var $Switch 	= <command> "request chassis routing-engine master switch";
 		var $O_Switch 	= jcs:invoke($Switch);
@@ -53,8 +56,8 @@ match / {
 		}
 		else
 		{
-			expr jcs:output("\n Re0 is not configured as Master! ");
-			expr test:Quit_Prompt_Function();
+			
+			expr test:Quit_Prompt_Function("\n Re0 is not configured as Master! ");
 			
 		}
 		
@@ -71,18 +74,24 @@ match / {
 	
 	var $Restoral_xml_file		= $File_name ;
 	var $O_Bgp_Config		= document($Restoral_xml_file);
+/********************************************** search for xml restoral file ***************************************************************/
+	expr test:Continue_Prompt_Function("\n Do you want to check the hardware status before continuing ?");
+
+	expr test:Hardware-Status($Restoral_xml_file);
 	
 
 	
 
-	expr jcs:output("Do you want to activate routing-instances ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to restore Pre Maintenance state for routing-instances ?");
 	
 /********************************************** activate routing-instances ****************************************************************/
-
+	
 	
 	if($O_Bgp_Config/Restoral/Restoral-Conf/configuration/routing-instances)
 	{
+		
+		expr test:Continue_Prompt_Function("\n Routing-instances is activated state Pre Maintenance.\n\n Do you want to activate routing-instances ?");
 		var $routing_instance_activate =	{
 					<configuration>{
             					<routing-instances active="active">;
@@ -91,10 +100,14 @@ match / {
 	call jcs:load-configuration( $connection, $configuration =$routing_instance_activate);
 		
 	}
+	else
+	{
+		expr jcs:output("\n Routing-instances is not activated Pre Maintenance. Pre Maintenance state is restored");
+	}
 
 
-	expr jcs:output("Do you want to activate routing-options ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to activate routing-options ?");
 
 /********************************************** activate routing-options *********************************************************************/
 	
@@ -109,8 +122,8 @@ match / {
 	
 	
 
-	expr jcs:output("Do you want to activate chassis redundancy ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to activate chassis redundancy ?");
 
 /********************************************** activate chassis redundancy ***********************************************************************/
 
@@ -123,8 +136,8 @@ match / {
 							}
 	call jcs:load-configuration( $connection, $configuration =$chassis_redundancy_activate);
 	
-	expr jcs:output("Do you want to activate protocols ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to activate protocols ?");
 
 /********************************************** activate protocols ***********************************************************************/
 	
@@ -139,8 +152,8 @@ match / {
 /********************************************** Wait for krt Queue ******************************************************/
 	expr test:Show_KRT_Queue();
 /********************************************** Wait for krt Queue ******************************************************/	
-	expr jcs:output("Do you want to activate bgp ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to activate bgp ?");
 
 /********************************************** activate bgp *****************************************************************************/
 
@@ -159,13 +172,16 @@ match / {
 	expr test:Show_KRT_Queue();
 /********************************************** Wait for krt Queue ******************************************************/
 
-	expr jcs:output(" Do you want to  delete protocols isis overload ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to  restore Pre Maintenance configuration of  ISIS ?");
 
 /********************************************** delete protocols isis overload ***********************************************************/
  
 	if($O_Bgp_Config/Restoral/Restoral-Conf/configuration/protocols/isis/timeout)
-	{		
+	{	
+		expr jcs:output("\n ISIS is not in overload state Pre Maintenance ");
+		
+		expr test:Continue_Prompt_Function(" Do you want to  delete protocols isis overload ?");
 		var $isis_delete_configuration={
 			<configuration> {
 				<protocols> {
@@ -177,8 +193,8 @@ match / {
 		   	 }
 		call jcs:load-configuration( $connection, $configuration =$isis_delete_configuration);
 
-		expr jcs:output("Do you want to  set protocols isis overload timeout 600 ?");
-		expr test:Continue_Prompt_Function();
+		
+		expr test:Continue_Prompt_Function("\n Do you want to  set protocols isis overload timeout 600 ?");
 
 /********************************************** set protocols isis overload timeout 600  *************************************************/
 
@@ -196,10 +212,43 @@ match / {
 
 		call jcs:load-configuration( $connection, $configuration =$isis_time_reset_configuration);
 	}
+	else
+	{
+		if($O_Bgp_Config/Restoral/Restoral-Conf/configuration/protocols/isis/overload)
+		{		
+			expr test:Continue_Prompt_Function("\n ISIS is in overload state Pre Maintenance. Do you want to set isis to Pre Maintenance state ? ");
+			var $isis_configuration={
+					<configuration> {
+						<protocols> {
+							<isis> {
+							<overload>;
+								}
+				    			    }
+							}
+		    				}
+			call jcs:load-configuration( $connection, $configuration =$isis_configuration);
+		}
+		else
+		{
+			expr jcs:output("\n ISIS is not in overload state Pre Maintenance ");
+			
+			expr test:Continue_Prompt_Function("\n Do you want to  delete protocols isis overload ?");	
+			var $isis_delete_configuration={
+				<configuration> {
+					<protocols> {
+						<isis> {
+							<overload delete="delete">;
+							}
+					    	}
+					}
+		   	 	}
+			call jcs:load-configuration( $connection, $configuration =$isis_delete_configuration);
+		}
+	}
 
 
-	expr jcs:output("Do you want to activate External BGP ? ");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to activate External BGP ? ");
 
 /********************************************** activate group <GROUP_NAME>  *************************************************/
 
@@ -250,6 +299,50 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[(type=="external")&&(not(star
 
 
 }
+
+<func:function name="test:Hardware-Status">
+{
+
+	param $Restoral_xml_file;
+	var $Pre_Maintainence=document($Restoral_xml_file);
+	var $Post_Maintainence=test:Tree-construct();
+	expr jcs:output("\n 		show chassis alarms");
+	expr jcs:output("*****************************************************************");
+	expr test:Diff_chassis_alarms($Pre_Maintainence,$Post_Maintainence);
+	expr jcs:output("\n 		show chassis fpc pic-status");
+	expr jcs:output("*****************************************************************");
+	expr test:Diff_chassis_fpc($Pre_Maintainence,$Post_Maintainence);
+	expr jcs:output("\n 		show chassis environment");
+	expr jcs:output("*****************************************************************");
+
+
+	expr test:Diff_Chassis_Environment($Pre_Maintainence,$Post_Maintainence);
+	expr jcs:output("\n 		show chassis routing-engine");
+	expr jcs:output("*****************************************************************");
+	
+	var $Routing_Engine_Checker	= <command> " show chassis routing-engine ";
+	var $O_Routing_Engine_Checker	= jcs:invoke($Routing_Engine_Checker);
+	
+	if($O_Routing_Engine_Checker/route-engine[(mastership-state=="master")&&(status=="OK")])
+	{
+		expr jcs:output("\n Master routing engine is Online");
+	}
+	else
+	{
+		expr test:Quit_Prompt_Function("\n Problem in Routing Engine.Please debug before continuing");
+		
+	}
+	if($O_Routing_Engine_Checker/route-engine[(mastership-state=="backup")&&(status=="OK")])
+	{
+		expr jcs:output("\n Backup routing engine is Online");
+	}
+	else
+	{
+		expr test:Quit_Prompt_Function("\n Problem in Routing Engine.Please debug before continuing");
+	}
+	
+}
+
 <func:function name="test:Diff-Statistics">
 {
 	param $Restoral_xml_file;
@@ -292,6 +385,9 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[(type=="external")&&(not(star
 	expr jcs:output("\n 		show route summary");
 	expr jcs:output("*****************************************************************");
 	expr test:Diff_route_summary($Pre_Maintainence,$Post_Maintainence);
+	expr jcs:output("\n 		show chassis environment");
+	expr jcs:output("*****************************************************************");
+	expr test:Diff_Chassis_Environment($Pre_Maintainence,$Post_Maintainence);
 	
 }
 
@@ -338,6 +434,9 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[(type=="external")&&(not(star
 	var $show_chassis_alarms	= <command> "show chassis alarms";
 	var $o_show_chassis_alarms	= jcs:invoke($show_chassis_alarms);
 
+	var $show_chassis_environment	= <command> "show chassis environment";
+	var $o_show_chassis_environment	= jcs:invoke($show_chassis_environment);
+
 
 var $content := {
 			<Restoral> {
@@ -345,6 +444,17 @@ var $content := {
 					copy-of $o_xml_config;
 					
 					}
+				<Restoral-Chassis-Environment>{		for-each($o_show_chassis_environment/environment-item)
+									{
+										 <environment-item>
+											{
+												<name>name;
+            											<class>class;
+            											<status>status;
+											}
+
+									}
+								}
 				<Restoral-route-summary>{
 
 
@@ -536,6 +646,45 @@ var $content := {
 			
 }
 
+
+<func:function name="test:Diff_Chassis_Environment">
+{
+	param $Pre_Maintainence;
+	param $Post_Maintainence;
+	
+	for-each($Pre_Maintainence/Restoral/Restoral-Chassis-Environment/environment-item)
+	{
+		var $pre-name	=	name;
+		var $pre-class	=	class;
+		var $pre-status	=	status;
+		if($Post_Maintainence/Restoral/Restoral-Chassis-Environment/environment-item[$pre-name==name])	
+		{
+			var $post-name		=	$Post_Maintainence/Restoral/Restoral-Chassis-Environment/environment-item[$pre-name==name]/name;
+			var $post-class		=	$Post_Maintainence/Restoral/Restoral-Chassis-Environment/environment-item[$pre-name==name]/class;
+			var $post-status	=	$Post_Maintainence/Restoral/Restoral-Chassis-Environment/environment-item[$pre-name==name]/status;
+			if($post-status!=$pre-status)
+			{
+				expr jcs:output(" The status of " _ $pre-name _ " changed from " _ $pre-status _ " to " _ $post-status);
+			}
+			
+		}
+		else
+		{
+			expr jcs:output("\n " _ $pre-name _ " with status " _ $pre-status _ " of class " _ $pre-class _ " is  missing post Maintainence"); 
+		}	
+	}
+	
+	for-each($Post_Maintainence/Restoral/Restoral-Chassis-Environment/environment-item)
+	{
+		var $post-name		=	name;
+		var $post-class		=	class;
+		var $post-status	=	status;	
+		if(not($Pre_Maintainence/Restoral/Restoral-Chassis-Environment/environment-item[$post-name==name]))
+		{
+			expr jcs:output("\n " _ $post-name _ " with status " _ $post-status _ " of class " _ $post-class _ " is newly added post Maintainence"); 
+		}
+	}
+}
 
 <func:function name="test:Diff_rsvp_interfaces">
 {
@@ -1037,8 +1186,8 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	
 	if($Count==0)
 	{
-		expr jcs:output("Queue didnt get converge in 10 minutes .Something is wrong.!");
-		expr test:Quit_Prompt_Function();
+		
+		expr test:Quit_Prompt_Function("\n Queue didnt get converge in 10 minutes .Something is wrong.!");
 		
 	}
 	for-each($o_show_krt_queue/krt-queue)
@@ -1055,7 +1204,7 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 			
 		}
 	}
-	expr jcs:output(" KRT Queue is Empty ");
+	expr jcs:output("\n KRT Queue is Empty ");
 	if($Perfect==1)
 	{
 			
@@ -1077,9 +1226,11 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 
 <func:function name="test:Quit_Prompt_Function">
 {
-	expr jcs:output("\n Please Choose \"yes\"  [to Quit], \"continue\" [to continue], \"show\" [show command]");
+	param $Display;
+	expr jcs:output($Display);
+	expr jcs:output("\n Please Choose \"quit\"  [to Quit], \"continue\" [to continue], \"show\" [show command]");
 	var $var = jcs:get-input( " Enter : " );
-	if($var=="yes")     
+	if($var=="quit")     
 	{ 
 	  		<xsl:message terminate="yes"> "Aborting the script";
 	} 
@@ -1088,7 +1239,7 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 		if($var=="show")
 		{
 			expr test:View_System_Running();
-			expr test:Quit_Prompt_Function();
+			expr test:Quit_Prompt_Function($Display);
 		}
 		else
 		{
@@ -1096,7 +1247,7 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 			{
 		
 				<xsl:message> "Wrong Option . Please retry\n";
-				expr test:Quit_Prompt_Function();
+				expr test:Quit_Prompt_Function($Display);
 				
 			
 			}
@@ -1149,7 +1300,7 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	if(test:File_Finder($File_Name)=="no")
 	{
 		expr jcs:output("\n You don't have the restoral in local disk");
-		expr jcs:output("\n You may have to specify the file name in local disk or download from FTP server");
+		expr jcs:output("\n You have to specify the file name in local disk ");
 		var $Restoral_File	=test:Restoral_File_Finder();
 		<func:result select="$Restoral_File">;
 	
@@ -1176,11 +1327,13 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	if($O_File_Search/directory/file-information[file-name==$File_name])
 	{
 		var $Result="yes";
+		expr jcs:output("\n File Present !");
 		<func:result select="$Result">;
 	}
 	else
 	{
 		var $Result="no";
+		expr jcs:output("\n File not Present !");
 		<func:result select="$Result">;
 	}
 }
@@ -1223,11 +1376,12 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	{
 		if($Option=="no")
 		{
-			var $Restoral_xml_file		= test:XML_Path_Finder();
-			<func:result select="$Restoral_xml_file">;
+			
+			expr test:Quit_Prompt_Function("\n Pre maintenace file is needed for Traffic Restoration");
 		}
 		else
 		{
+			expr jcs:output("\n Wrong option choosen .Please retry ");
 			var $Restoral_xml_file		= test:Restoral_File_Finder();
 			<func:result select="$Restoral_xml_file">;	
 		}
@@ -1250,6 +1404,8 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 
 <func:function name="test:Continue_Prompt_Function">
 {
+	param $Display;
+	expr jcs:output($Display);
 	expr jcs:output("\n Please Choose \"yes\" [to Continue],\"quit\" [to Exit],\"show\" [show command]");
 	
 	var $var = jcs:get-input(" Enter: ");
@@ -1269,7 +1425,7 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 			if($var!="yes")
 			{
 		
-				<xsl:message> "Please choose between 'yes' or 'no'.\n";
+				<xsl:message> "Wrong Option . Please retry \n";
 				expr test:Continue_Prompt_Function();
 				
 			

@@ -15,8 +15,8 @@ import "../import/junos.xsl";
 match / {
 	
 	expr jcs:output("\n \n Welcome to Router Upgradation MOP ");
-	expr jcs:output("\n This script removes the traffic and sets the router in overload ");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n This script removes the traffic and sets the router in overload ");
 	
 	var $File_name		= test:File_Name_Creater();
 
@@ -28,14 +28,14 @@ match / {
 
 	if(test:File_Finder($File_name _ ".xml")=="yes")
 	{
-expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be running Ugrade script twice before restoration. This is dangerous. Please Quit this script");
-	expr test:Quit_Prompt_Function();
+
+expr test:Quit_Prompt_Function("\n " _ $File_name _ ".xml" _ " is already present. You may be running Ugrade script twice before restoration. This is dangerous. Please Quit this script");
 	}
 
 /************************************** Saving the configuration at /var/home/full/  ****************************************************/
 
-	expr jcs:output("\n Do you want to save the configuration at /var/home/full/" _ $File_name _ " ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to save the configuration at /var/home/full/" _ $File_name _ " ?");
 
 	
 	var $Save_Configuration 	= <get-configuration format="text"> ;
@@ -53,8 +53,8 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 	if($result-writing//self::xnm:error || $result-writing//self::xnm:warning)
 	{
 		expr jcs:output($result-writing);
-		expr jcs:output("\n File transfer failed !.Please exit the script and check if the path /var/home/full/ is valid ");
-		expr test:Quit_Prompt_Function();
+		
+		expr test:Quit_Prompt_Function("\n File transfer failed !.Please exit the script and check if the path /var/home/full/ is valid ");
 	
 	}
 
@@ -62,15 +62,15 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 
 /**************************************Saving the config at backup routing engine ****************************************************/
 	
-	expr jcs:output("\n Do you want to save the configuration in back-up routing engine at /var/home/full/" _ $File_name _ " ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to save the configuration in back-up routing engine at /var/home/full/" _ $File_name _ " ?");
 		
 	expr test:Routing_Engine_File_Transfer("/var/home/full/" _ $File_name,test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_name);
 
 
 /**************************************Transferring the config file to FTP server FTP****************************************************/
 
-	expr jcs:output("\n Do you want to save the configuration in the FTP server ?" );
+	/*expr jcs:output("\n Do you want to save the configuration in the FTP server ?" );
 	expr test:Continue_Prompt_Function();
 
 	expr test:FTP_File_Transfer("/var/home/full/" _ $File_name,$File_name);
@@ -81,7 +81,7 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 	var $O_Config_File_Checksum	= jcs:invoke($Config_File_Checksum);
 	expr jcs:output("\n The md5 checksum of the file is " _ $O_Config_File_Checksum/file-checksum/checksum);
 	expr jcs:output("\n Please check whether the md5 matches to the md5 of the file in the FTP server ");
-	expr test:Continue_Prompt_Function();
+	expr test:Continue_Prompt_Function();*/
 
 
 
@@ -91,14 +91,14 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 	
 
 	var $Image_File_Path 		= test:Search_Image_File();
-	expr jcs:output("\n The Final file is " _ 	$Image_File_Path);
+	/*expr jcs:output("\n The Final file is " _ 	$Image_File_Path);*/
 
 
 
 /***********************************************show system storage***********************************************************************/
 
-	expr jcs:output("\n Do you want to check whether the router is properly booted from flash disk ?" );
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to check whether the router is properly booted from flash disk ?" );
 
 	var $Show_System_Storage	= <command> "show system storage";
 	var $O_Show_System_Storage	= jcs:invoke($Show_System_Storage);
@@ -119,20 +119,20 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 		else
 		{
 			expr jcs:output("\n File system " _ $File-system-name _ " mounted-on " _ substring($Mounted-on,5,5));
-			expr jcs:output("\n The router is not properly booted from flash disk .Please quit and debug the issue before the software upgrade");
-			expr test:Quit_Prompt_Function();
+			
+		expr test:Quit_Prompt_Function("\n The router is not properly booted from flash disk .Please quit and debug the issue before the software upgrade");
 		}
 	}
 	else
 	{
-		expr jcs:output(" The ad0 file system is not present .Please quit and debug the issue before the software upgrade");
-		expr test:Quit_Prompt_Function();
+		
+		expr test:Quit_Prompt_Function(" The ad0 file system is not present .Please quit and debug the issue before the software upgrade");
 	}
 
 /**************************************Ensure the “compact flash” and “disk” are in the bootlist:*****************************************/
 
-	expr jcs:output("\n Do you want to check whether “compact flash” and “disk” are in the bootlist ? " );
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to check whether “compact flash” and “disk” are in the bootlist ? " );
 
 	var $connection = jcs:open();
         var $sysctl_bootdev = {
@@ -146,8 +146,8 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 	if(contains($o_sysctl_bootdev,"error"))
 	{
 		expr jcs:output("\n Unable to run shell command");
-		expr jcs:output(" Please run \"sysctl -a | grep bootdevs\" to check whether \"compact flash\" and \"disk\" are in the bootlist");
-		expr test:Quit_Prompt_Function();
+		
+		expr test:Quit_Prompt_Function(" Please run \"sysctl -a | grep bootdevs\" to check whether \"compact flash\" and \"disk\" are in the bootlist");
 	}
      	else
 	{
@@ -159,17 +159,16 @@ expr jcs:output("\n " _ $File_name _ ".xml" _ " is already present. You may be r
 	}
 	else
 	{
-		expr jcs:output("\n Please quit and use (sysctl -w machdep.bootdevs=pcmcia-flash,compact-flash,disk,lan) in super user mode to add compact-flash and disk
-in the bootlist  ");
-		expr test:Quit_Prompt_Function();
+		
+expr test:Quit_Prompt_Function("\n Please quit and use (sysctl -w machdep.bootdevs=pcmcia-flash,compact-flash,disk,lan) in super user mode to add compact-flash and disk in the bootlist  ");
 			
             					
 	}
 
 	}
 /********************************************************* Traffic maintenence************************************************************/
-	expr jcs:output("\n Do you want to save the Pre Maintenence state at /var/home/full/" _ $File_name _ ".xml");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence state at /var/home/full/" _ $File_name _ ".xml");
 
 	
 	
@@ -179,8 +178,8 @@ in the bootlist  ");
 
 /*********************************************************request system snapshot*********************************************************/
 
-	expr jcs:output("\n Do you want to run \"request system snapshot\" ? " );
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to run \"request system snapshot\" ? " );
 
 	var $request_system_snapshot	= <command> "request system snapshot";
 	var $o_request_system_snapshot	= jcs:invoke($request_system_snapshot);
@@ -188,8 +187,8 @@ in the bootlist  ");
 	if($o_request_system_snapshot//self::xnm:error || $o_request_system_snapshot//self::xnm:warning)
 	{
 		expr jcs:output("\n Error in executing request system snap shot ");
-		expr jcs:output("\n Please Quit this quit and activate the traffic using restoral.slax script");
-		expr test:Quit_Prompt_Function();
+		
+		expr test:Quit_Prompt_Function("\n Please Quit this quit and activate the traffic using restoral.slax script");
 		
 	}
 	else
@@ -207,23 +206,23 @@ in the bootlist  ");
 			else
 			{
 				expr jcs:output("\n The software and configuration are not archived onto the /altroot ");
-				expr jcs:output("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
-				expr test:Quit_Prompt_Function();
+				
+		expr test:Quit_Prompt_Function("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
 			}
 		}
 		else
 		{
 			expr jcs:output("\n The software and configuration are not archived onto the /altconfig file systems ");
-			expr jcs:output("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
-			expr test:Quit_Prompt_Function();
+			
+		expr test:Quit_Prompt_Function("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
 			
 		}
 	}
 
 /*********************************************************request system snapshot other routing engine*********************************************************/
 
-	expr jcs:output("\n Do you want to run \"request system snapshot\" at other routing engine ? " );
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to run \"request system snapshot\" at other routing engine ? " );
 	expr test:snapshot_other_routing_engine();
 
 
@@ -253,8 +252,8 @@ in the bootlist  ");
 	if($o_request_system_snapshot//self::xnm:error || $o_request_system_snapshot//self::xnm:warning)
 	{
 		expr jcs:output("\n Error in executing request system snap shot ");
-		expr jcs:output("\n Please Quit this quit and activate the traffic using restoral.slax script");
-		expr test:Quit_Prompt_Function();
+		
+		expr test:Quit_Prompt_Function("\n Please Quit this quit and activate the traffic using restoral.slax script");
 		
 	}
 	else
@@ -272,15 +271,15 @@ in the bootlist  ");
 			else
 			{
 				expr jcs:output("\n The software and configuration are not archived onto the /altroot ");
-				expr jcs:output("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
-				expr test:Quit_Prompt_Function();
+				
+		expr test:Quit_Prompt_Function("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
 			}
 		}
 		else
 		{
 			expr jcs:output("\n The software and configuration are not archived onto the /altconfig file systems ");
-			expr jcs:output("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
-			expr test:Quit_Prompt_Function();
+			
+		expr test:Quit_Prompt_Function("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
 			
 		}
 	}
@@ -343,6 +342,9 @@ in the bootlist  ");
 	var $show_chassis_alarms	= <command> "show chassis alarms";
 	var $o_show_chassis_alarms	= jcs:invoke($show_chassis_alarms);
 
+	var $show_chassis_environment	= <command> "show chassis environment";
+	var $o_show_chassis_environment	= jcs:invoke($show_chassis_environment);
+
 
 var $content := {
 			<Restoral> {
@@ -350,6 +352,17 @@ var $content := {
 					copy-of $o_xml_config;
 					
 					}
+				<Restoral-Chassis-Environment>{		for-each($o_show_chassis_environment/environment-item)
+									{
+										 <environment-item>
+											{
+												<name>name;
+            											<class>class;
+            											<status>status;
+											}
+
+									}
+								}
 				<Restoral-route-summary>{
 
 
@@ -579,16 +592,17 @@ var $content := {
 	if ($results-xml//self::xnm:error || $results-xml//self::xnm:warning)
 	{
 		expr jcs:output($results-xml);
-		expr jcs:output("\n File transer failed ! Please quit and check connections ");
-		expr test:Quit_Prompt_Function();
+		
+		expr test:Quit_Prompt_Function("\n File transer failed ! Please quit and check connections ");
 	}
-	else
-	{
-		expr jcs:output("\n Backup file saved as /var/home/full/" _ $File_Name_Xml);
-	}
+	
+	/*
+	expr jcs:output("\n Do you want to save the Pre Maintenence state in the FTP server ?");
+	expr test:Continue_Prompt_Function();
+	expr test:FTP_File_Transfer("/var/home/full/" _ $File_Name_Xml,$File_Name_Xml);*/
 
 	
-	expr test:FTP_File_Transfer("/var/home/full/" _ $File_Name_Xml,$File_Name_Xml);
+expr test:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence state at " _ test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_Name_Xml);
 	expr test:Routing_Engine_File_Transfer("/var/home/full/" _ $File_Name_Xml,test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_Name_Xml);
 }
 
@@ -606,11 +620,13 @@ var $content := {
 	if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-information[file-name==$File_name])
 	{
 		var $Result="yes";
+		expr jcs:output(" File present !");
 		<func:result select="$Result">;
 	}
 	else
 	{
 		var $Result="no";
+		expr jcs:output(" File not present !");
 		<func:result select="$Result">;
 	}
 }
@@ -681,8 +697,8 @@ var $content := {
 			}
 			else
 			{
-				expr jcs:output("\n You choose a file that is not present .");
-				expr test:Quit_Prompt_Function();
+				
+				expr test:Quit_Prompt_Function("\n You choose a file that is not present .");
 				expr jcs:output("\n Please retry");
 				var $Image_File_Path 	=  test:Search_Image_File();
 				<func:result select="$Image_File_Path">;
@@ -751,7 +767,7 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 		
 		if($Image_Option=="yes")
 		{
-			var $Image_File	= jcs:get-input("\n Please give the image file name ?");
+			var $Image_File	= jcs:get-input("\n Please give the image file name ");
 			if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-information[file-name==$Image_File])
 			{
 				
@@ -764,8 +780,8 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 			}
 			else
 			{
-				expr jcs:output("\n You choose a file that is not present .");
-				expr test:Quit_Prompt_Function();
+				
+				expr test:Quit_Prompt_Function("\n You choose a file that is not present .");
 				var $Image_File_Path 	=   test:Image_File_Search_Backup();
 				<func:result select="$Image_File_Path">;
 			}
@@ -773,9 +789,9 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 		}
 		else
 		{
-			expr jcs:output("\n You don't have the required Image file in both of the routing engines !");
-			expr jcs:output("\n Do you still want to continue with the maintenance ");
-			expr test:Quit_Prompt_Function();
+			
+			
+expr test:Quit_Prompt_Function("\n You don't have the required Image file in both of the routing engines ! \n Do you still want to continue with the maintenance ");
 				
 		}
 		
@@ -786,9 +802,9 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 	else
 	{
 		
-		expr jcs:output("\n You don't have the required Image file in both of the routing engines !");
-		expr jcs:output("\n Do you still want to continue with the maintenance ");
-		expr test:Quit_Prompt_Function();
+		
+		
+expr test:Quit_Prompt_Function("\n You don't have the required Image file in both of the routing engines !\n Do you still want to continue with the maintenance ");
 		
 		
 	}
@@ -868,8 +884,8 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 		}
 		else
 		{
-			expr jcs:output("\n Routing engine is not configured. Please quit and debug.");
-			expr test:Quit_Prompt_Function();
+			
+			expr test:Quit_Prompt_Function("\n Routing engine is not configured. Please quit and debug.");
 			
 		}
 	}
@@ -892,8 +908,8 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 	if ($results-xml//self::xnm:error)
 	{
 		expr jcs:output($results-xml);
-		expr jcs:output("\nFile transer failed between routing engines ! Please quit and check connections ");
-		expr test:Continue_Prompt_Function();
+		
+		expr test:Quit_Prompt_Function("\n File transer failed between routing engines ! Please quit and check connections ");
 	}
 	else
 	{
@@ -908,6 +924,8 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 
 <func:function name="test:Continue_Prompt_Function">
 {
+	param $Display;
+	expr jcs:output($Display);
 	expr jcs:output("\n Please Choose \"yes\" [to Continue],\"quit\" [to Exit],\"show\" [show command]");
 	
 	var $var = jcs:get-input(" Enter: ");
@@ -920,15 +938,15 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 		if($var=="show")
 		{
 			expr test:View_System_Running();
-			expr test:Continue_Prompt_Function();
+			expr test:Continue_Prompt_Function($Display);
 		}
 		else
 		{
 			if($var!="yes")
 			{
 		
-				<xsl:message> "Please choose between 'yes' or 'no'.\n";
-				expr test:Continue_Prompt_Function();
+				<xsl:message> "Wrong Option . Please retry\n";
+				expr test:Continue_Prompt_Function($Display);
 				
 			
 			}
@@ -953,6 +971,8 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 
 <func:function name="test:Quit_Prompt_Function">
 {
+	param $Display;
+	expr jcs:output($Display);
 	expr jcs:output("\n Please Choose \"quit\"  [to Quit], \"continue\" [to continue], \"show\" [show command]");
 	var $var = jcs:get-input( " Enter : " );
 	if($var=="quit")     
@@ -964,7 +984,7 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 		if($var=="show")
 		{
 			expr test:View_System_Running();
-			expr test:Quit_Prompt_Function();
+			expr test:Quit_Prompt_Function($Display);
 		}
 		else
 		{
@@ -972,7 +992,7 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 			{
 		
 				<xsl:message> "Wrong Option . Please retry\n";
-				expr test:Quit_Prompt_Function();
+				expr test:Quit_Prompt_Function($Display);
 				
 			
 			}
@@ -984,16 +1004,16 @@ if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-inform
 template Traffic_Removal_Function()
 {
 	expr jcs:output("\n\n Hello! Welcome to Traffic Removal MOP \n");
-	expr jcs:output("\n\n Checking for whether the router is connected to VOIP equipment .\n ");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n\n Do you want to remove the traffic from router ?\n ");
 
 /************************************* saving the configuration **************************************************************************/	
 	
 
 
-	expr jcs:output("\n Do you want to run the command \" show aps\" ?");
+
 	
-	expr test:Continue_Prompt_Function();
+	expr test:Continue_Prompt_Function("\n Do you want to run the command \" show aps\" ?");
 
 /********************************************** show aps *********************************************************************************/
 
@@ -1002,8 +1022,8 @@ template Traffic_Removal_Function()
 
 	if( ($o_show_aps/aps-interface)&&($o_show_aps) && not(($o_show_aps//self::xnm:warning)||($o_show_aps//self::xnm:error)))
 	{
-		expr jcs:output("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
-		expr test:Quit_Prompt_Function();
+		
+		expr test:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
 	}
 
 /**********************************************  *********************************************************************************/
@@ -1011,8 +1031,8 @@ template Traffic_Removal_Function()
 
 	
 
-	expr jcs:output("\n Do you want to run the command \" show bgp summary| match 1661 \" ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to run the command \" show bgp summary| match 1661 \" ?");
 	
 	
 	
@@ -1026,14 +1046,14 @@ template Traffic_Removal_Function()
 	if($o_show_bgp/bgp-peer[peer-as==1661])
 	{
 		
-			expr jcs:output("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
-			expr test:Quit_Prompt_Function();			
+			
+			expr test:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");			
 		
 			
 	}
  
-	expr jcs:output("\n Do you want to run the command \"show bfd session | match ^152\" ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to run the command \"show bfd session | match ^152\" ?");
 
 /********************************************** show bfd session | match ^152 ************************************************************/
 
@@ -1042,15 +1062,15 @@ template Traffic_Removal_Function()
 	
 	if($o_show_bfd/bfd-session[starts-with(session-neighbor,152)])
 	{
-			expr jcs:output("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
-			expr test:Quit_Prompt_Function();	
+			
+			expr test:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
 		
 	}
 	
 	
 	
-	expr jcs:output("\n Do you want to run the command \" show vrrp \" ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to run the command \" show vrrp \" ?");
 
 /********************************************** show vrrp ********************************************************************************/
 
@@ -1059,14 +1079,14 @@ template Traffic_Removal_Function()
 	
 	if( ($o_show_vrrp) &&($o_show_vrrp/vrrp-interface) && not(($o_show_vrrp//self::xnm:warning)||($o_show_vrrp//self::xnm:error)) ) 
 	{
-		expr jcs:output("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)");
-		expr test:Quit_Prompt_Function();
+		
+		expr test:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)");
 	}
 
 	
 
-	expr jcs:output("\n Do you want to run the command \"show l2circuit connections\" ? ");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to run the command \"show l2circuit connections\" ? ");
 
 /********************************************** show l2circuit connections ***************************************************************/
 
@@ -1075,12 +1095,12 @@ template Traffic_Removal_Function()
 	 
 	if( ($o_show_l2connect/l2circuit-neighbor)&&($o_show_l2connect) && not(($o_show_l2connect//self::xnm:warning)||($o_show_l2connect//self::xnm:error)) ) 
 	{
-		expr jcs:output("\n Look like it is XT1.SAC1 or XT2.HOU7 router ? ");
-		expr test:Continue_Prompt_Function();
+		
+		expr test:Continue_Prompt_Function("\n Look like it is XT1.SAC1 or XT2.HOU7 router ? ");
 	}
 
-	expr jcs:output("\n Do you want to run the command \" show mpls lsp | match sig \" ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to run the command \" show mpls lsp | match sig \" ?");
 
 /********************************************** show mpls lsp | match sig ****************************************************************/
 
@@ -1089,14 +1109,14 @@ template Traffic_Removal_Function()
 	
 	if($o_show_mpls_lsp/rsvp-session-data[session-type=="Ingress"]/rsvp-session/mpls-lsp[contains(name,"SIG")])
 	{
-			expr jcs:output("\n Look like it is XT1.SAC1 or XT2.HOU7 router ");
-			expr test:Continue_Prompt_Function();
+			
+			expr test:Continue_Prompt_Function("\n Look like it is XT1.SAC1 or XT2.HOU7 router ");
 	}
 	
 	if($o_show_mpls_lsp/rsvp-session-data[session-type=="Egress"]/rsvp-session[contains(name,"SIG")])
 	{
-			expr jcs:output("\n Looks like it is XT1.SAC1 or XT2.HOU7 router ");
-			expr test:Continue_Prompt_Function();
+			
+			expr test:Continue_Prompt_Function("\n Looks like it is XT1.SAC1 or XT2.HOU7 router ");
 	}
 
 	
@@ -1113,29 +1133,29 @@ template Traffic_Removal_Function()
 	if($o_show_isis_adjacency/isis-adjacency[contains(interface-name,"XR")])
 	{
 		expr jcs:output("\n Looks like XR router is directly connected. ");
-		expr jcs:output("\n Before going further please check on opposite plane XR devices to make sure the ISIS adjacencies to the upstream XT/XL are up");
-		expr test:Continue_Prompt_Function();
+		
+expr test:Continue_Prompt_Function("\n Before going further please check on opposite plane XR devices to make sure the ISIS adjacencies to the upstream XT/XL are up");
 	
 		if(not($o_show_bgp/bgp-peer[peer-as==705]))
 		{
 		
-			expr jcs:output("\n The BGP sessions to AS 705 is not present .Please resolve the issue before continuing ");
-			expr test:Continue_Prompt_Function();		
+			
+			expr test:Continue_Prompt_Function("\n The BGP sessions to AS 705 is not present .Please resolve the issue before continuing ");	
 		
 			
 		}
 		else
 		{
 			
-			expr jcs:output("\n Please check on for any eBGP sessions with AS 705 on other plane. The same BGP sessions should exist on both planes. ");
-			expr test:Continue_Prompt_Function();
+			
+	expr test:Continue_Prompt_Function("\n Please check on for any eBGP sessions with AS 705 on other plane. The same BGP sessions should exist on both planes. ");
 		}
 
 	}
 
 	var $connection = jcs:open();
-	expr jcs:output("\n Do you want to Deactivate External BGP ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to Deactivate External BGP ?");
 /********************************************** Deactivating External BGP Neighbors ******************************************************/
 
  	var $Bgp_Config=<get-configuration>;
@@ -1164,8 +1184,8 @@ template Traffic_Removal_Function()
 /********************************************** Wait for krt Queue ******************************************************/
 	expr test:Show_KRT_Queue();
 
-	expr jcs:output("\n Do you want to run the command \" show isis database | match overload | match “XT|XL|BB|TL \" ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to run the command \" show isis database | match overload | match “XT|XL|BB|TL \" ?");
 
 /**************************************show isis database | match overload | match “XT|XL|BB|TL*******************************************/
 
@@ -1206,8 +1226,8 @@ template Traffic_Removal_Function()
 
 
 
-	expr jcs:output("\n Do you want set protocols isis overload ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want set protocols isis overload ?");
 
 /********************************************** set protocols isis overload **************************************************************/
 	var $isis_configuration={
@@ -1236,8 +1256,8 @@ template Traffic_Removal_Function()
 	call jcs:load-configuration( $connection, $configuration =$isis_time_configuration);	
 	call jcs:load-configuration( $connection, $configuration =$isis_configuration);
 
-	expr jcs:output("\n Do you want deactivate bgp protocols ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want deactivate bgp protocols ?");
 	
 /********************************************** deactivate bgp protocols *****************************************************************/
 
@@ -1258,10 +1278,10 @@ template Traffic_Removal_Function()
 	expr test:Show_KRT_Queue();
 
 
-	expr jcs:output("\n Do you want deactivate protocols ?");
+
 	
 	
-	expr test:Continue_Prompt_Function();
+	expr test:Continue_Prompt_Function("\n Do you want deactivate protocols ?");
 
 /********************************************** deactivate protocols *********************************************************************/
 
@@ -1278,8 +1298,8 @@ template Traffic_Removal_Function()
 	
 	
 
-	expr jcs:output("\n Do you want to deactivate routing-options ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to deactivate routing-options ?");
 
 /********************************************** deactivate routing-options *********************************************************************/
 	
@@ -1292,8 +1312,8 @@ template Traffic_Removal_Function()
 
 
 	
-	expr jcs:output("\n Do you want to deactivate chassis redundancy ?");
-	expr test:Continue_Prompt_Function();
+	
+	expr test:Continue_Prompt_Function("\n Do you want to deactivate chassis redundancy ?");
 
 /********************************************** deactivate chassis redundancy *********************************************************************/
 
@@ -1308,8 +1328,8 @@ template Traffic_Removal_Function()
 	call jcs:load-configuration( $connection, $configuration =$chassis_redundancy_deactivate);
 
 
-	expr jcs:output("\n Do you want to deactivate routing-instances ?");
-	expr test:Continue_Prompt_Function();
+
+	expr test:Continue_Prompt_Function("\n Do you want to deactivate routing-instances if configured ?");
 
 /********************************************** deactivate routing-instances *********************************************************************/
 
@@ -1317,6 +1337,9 @@ template Traffic_Removal_Function()
 	var $O_Routing-Instances	= jcs:invoke($Routing-Instances);
 	if($O_Routing-Instances/routing-instances)
 	{
+		expr jcs:output("\n Routing-instances are configured .");
+		
+		expr test:Continue_Prompt_Function("\n Do you want to deactivate routing-instances ?");
 		var $routing_instance_deactivate =	{
 					<configuration>{
             					<routing-instances inactive="inactive">;
@@ -1324,6 +1347,10 @@ template Traffic_Removal_Function()
 						}
 	call jcs:load-configuration( $connection, $configuration =$routing_instance_deactivate);
 		
+	}
+	else
+	{
+		expr jcs:output("\n Routing-instances are not configured .");
 	}
 
 }
@@ -1350,8 +1377,8 @@ template Traffic_Removal_Function()
 	
 	if($Count==0)
 	{
-		expr jcs:output("Queue didnt get converge in 10 minutes .Something is wrong.!");
-		expr test:Quit_Prompt_Function();
+		
+		expr test:Quit_Prompt_Function("\n Queue didnt get converge in 10 minutes .Something is wrong.!");
 		
 	}
 	for-each($o_show_krt_queue/krt-queue)
@@ -1368,7 +1395,7 @@ template Traffic_Removal_Function()
 			
 		}
 	}
-	expr jcs:output(" Queue is Empty");
+	expr jcs:output(" KRT Queue is Empty");
 	if($Perfect==1)
 	{
 			

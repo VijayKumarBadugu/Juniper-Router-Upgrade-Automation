@@ -1,4 +1,10 @@
-﻿version 1.0;
+/*
+$Id$
+*/
+
+
+
+version 1.0;
 ns junos = "http://xml.juniper.net/junos/*/junos";
 ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
 ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
@@ -7,15 +13,19 @@ ns func extension = "http://exslt.org/functions";
 ns test = "http://xml.juniper.net/test";
 ns exsl extension = "http://exslt.org/common";
 
+
 import "../import/junos.xsl";
 
 
 
 match / {
-
+	
 	expr jcs:output("\n\n Hello! Welcome to Automated MOP \n");
 	expr jcs:output("\n\n Checking for whether the router is connected to VOIP equipment .\n ");
 	expr test:Continue_Prompt_Function();
+
+/************************************* saving the configuration **************************************************************************/	
+	expr test:Configuration_Xml_Saved();
 
 
 	expr jcs:output("\n ===========> Running show aps");
@@ -25,7 +35,7 @@ match / {
 	var $show_aps		= <command> "show aps";
 	var $o_show_aps		= jcs:invoke($show_aps);
 
-	if( ($o_show_aps) && not(($o_show_aps//self::xnm:warning)||($o_show_aps//self::xnm:error)))
+	if( ($o_show_aps/Interface)&&($o_show_aps) && not(($o_show_aps//self::xnm:warning)||($o_show_aps//self::xnm:error)))
 	{
 		expr jcs:output("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
 		expr test:Continue_Prompt_Function();
@@ -34,7 +44,7 @@ match / {
 /**********************************************  *********************************************************************************/
 	
 
-	expr test:Configuration_Xml_Saved();
+	
 
 	expr jcs:output("\n ===========> show bgp summary| match 1661");
 	
@@ -95,7 +105,7 @@ match / {
 	var $show_l2connect 	= <command> "show l2circuit connections";
 	var $o_show_l2connect 	= jcs:invoke($show_l2connect);
 	 
-	if( ($o_show_l2connect) && not(($o_show_l2connect//self::xnm:warning)||($o_show_l2connect//self::xnm:error)) ) 
+	if( ($o_show_l2connect/Neighbor)&&($o_show_l2connect) && not(($o_show_l2connect//self::xnm:warning)||($o_show_l2connect//self::xnm:error)) ) 
 	{
 		expr jcs:output("\n Look like it is XT1.SAC1 or XT2.HOU7 router ? ");
 		expr test:Continue_Prompt_Function();
@@ -374,7 +384,7 @@ match / {
 	param $Source_File;
 	param $Destination_File;
 	var $FTP_IP 		= jcs:get-input("\n Please enter the IP address of the FTP server " );
-	var $FTP_Hostname	= jcs:get-input("\n Please enter host name of the FTP server " );
+	var $FTP_Hostname	= jcs:get-input("\n Please enter user name of the FTP server " );
 	var $Password		= jcs:get-secret("\n Please enter the password ");
 	
 	var $FTP_Config_path	= test:FTP_Config_Path_Finder();
@@ -411,7 +421,7 @@ match / {
 	param $Source_File;
 	param $Destination_File;
 	var $FTP_IP 		= jcs:get-input( "\n Please enter the IP address of the FTP server " );
-	var $FTP_Hostname	= jcs:get-input( "\n Please enter host name of the FTP server " );
+	var $FTP_Hostname	= jcs:get-input( "\n Please enter user name of the FTP server " );
 	var $Password		= jcs:get-secret( "\n Please enter the password ");
 	
 	var $FTP_Config_path	= test:FTP_Config_Path_Finder();
@@ -455,7 +465,7 @@ match / {
 	{
 		expr jcs:output($results-xml);
 		expr jcs:output("\nFile transer failed ! Please quit anc check connections ");
-		expr test:Continue_Prompt_Function();
+		call Continue_Prompt_Function();
 	}
 	else
 	{
@@ -481,7 +491,7 @@ match / {
 		{
 		
 			<xsl:message> "Please choose between 'yes' or 'no'.\n";
-			expr test:Continue_Prompt_Function();
+			call Continue_Prompt_Function();
 				
 			
 		}
@@ -540,3 +550,4 @@ match / {
 	}
 
 }
+

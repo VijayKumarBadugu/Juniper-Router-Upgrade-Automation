@@ -68,30 +68,17 @@ expr test:Quit_Prompt_Function("\n " _ $File_name _ ".xml" _ " is already presen
 	expr test:Routing_Engine_File_Transfer("/var/home/full/" _ $File_name,test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_name);
 
 
-/**************************************Transferring the config file to FTP server FTP****************************************************/
 
-	/*expr jcs:output("\n Do you want to save the configuration in the FTP server ?" );
-	expr test:Continue_Prompt_Function();
-
-	expr test:FTP_File_Transfer("/var/home/full/" _ $File_name,$File_name);
-
-	var $Config_File_Checksum	= <get-checksum-information>{
-					<path>"/var/home/full/" _ $File_name;
-							}
-	var $O_Config_File_Checksum	= jcs:invoke($Config_File_Checksum);
-	expr jcs:output("\n The md5 checksum of the file is " _ $O_Config_File_Checksum/file-checksum/checksum);
-	expr jcs:output("\n Please check whether the md5 matches to the md5 of the file in the FTP server ");
-	expr test:Continue_Prompt_Function();*/
 
 
 
 /**************************Searching for the install file and dowloading from back up if not present*************************************/
 /****************************************************************************************************************************************/
-	/*expr jcs:output("\n Searching all  software image in the local disk /var/home/full/" );*/
+	
 	
 
 	var $Image_File_Path 		= test:Search_Image_File();
-	/*expr jcs:output("\n The Final file is " _ 	$Image_File_Path);*/
+	
 
 
 
@@ -596,10 +583,7 @@ var $content := {
 		expr test:Quit_Prompt_Function("\n File transer failed ! Please quit and check connections ");
 	}
 	
-	/*
-	expr jcs:output("\n Do you want to save the Pre Maintenence state in the FTP server ?");
-	expr test:Continue_Prompt_Function();
-	expr test:FTP_File_Transfer("/var/home/full/" _ $File_Name_Xml,$File_Name_Xml);*/
+	
 
 	
 expr test:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence state at " _ test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_Name_Xml);
@@ -916,8 +900,7 @@ expr test:Quit_Prompt_Function("\n You don't have the required Image file in bot
 		expr jcs:output("\n File transfered successfully ! ");
 	}
 	
-	/*expr jcs:output("\n Source File : " _ $Source_File);
-	expr jcs:output("\n Destination File : " _ $Destination_File);*/
+	
 }
 
 
@@ -1102,90 +1085,10 @@ template Traffic_Removal_Function()
 	
 
 	
-	expr jcs:output("\n Now running the command \"show l2circuit connections\"  ");
-
-/********************************************** show l2circuit connections ***************************************************************/
-
-	var $show_l2connect 	= <command> "show l2circuit connections";
-	var $o_show_l2connect 	= jcs:invoke($show_l2connect);
-	 
-	if( ($o_show_l2connect/l2circuit-neighbor)&&($o_show_l2connect) && not(($o_show_l2connect//self::xnm:warning)||($o_show_l2connect//self::xnm:error)) ) 
-	{
-		
-		expr test:Continue_Prompt_Function("\n Look like it is XT1.SAC1 or XT2.HOU7 router ? ");
-	}
-	else
-	{
-		expr jcs:output(" No output present");
-	}
 	
 
 	
-	expr jcs:output("\n Now running the command  \" show mpls lsp | match sig \" ");
 
-/********************************************** show mpls lsp | match sig ****************************************************************/
-
-	var $show_mpls_lsp	= <command> "show mpls lsp";
-	var $o_show_mpls_lsp	= jcs:invoke($show_mpls_lsp);
-	
-	if($o_show_mpls_lsp/rsvp-session-data[session-type=="Ingress"]/rsvp-session/mpls-lsp[contains(name,"SIG")])
-	{
-			
-			expr test:Continue_Prompt_Function("\n Look like it is XT1.SAC1 or XT2.HOU7 router ");
-	}
-	else
-	{
-			expr jcs:output(" No match found in Ingress");
-	}
-	
-	if($o_show_mpls_lsp/rsvp-session-data[session-type=="Egress"]/rsvp-session[contains(name,"SIG")])
-	{
-			
-			expr test:Continue_Prompt_Function("\n Looks like it is XT1.SAC1 or XT2.HOU7 router ");
-	}
-	else
-	{
-			expr jcs:output(" No match found in Egress");
-	}
-
-	
-	
-/********************************************** XR routers show adjacency ****************************************************************/
-/********************************************** show isis adjacency | match XR ***********************************************************/
-/********************************************** show bgp summary | match 705 *************************************************************/
-
-	/*
-	expr jcs:output("\n Now running the command show isis adjacency | match XR ");
-	var $show_isis_adjacency 	= <command> "show isis adjacency";
-	var $o_show_isis_adjacency	= jcs:invoke($show_isis_adjacency);
-	
-	if($o_show_isis_adjacency/isis-adjacency[contains(interface-name,"XR")])
-	{
-		expr jcs:output("\n Looks like XR router is directly connected. ");
-		
-expr test:Quit_Prompt_Function("\n Before going further please check on opposite plane XR devices to make sure the ISIS adjacencies to the upstream XT/XL are up");
-	
-		expr jcs:output(" Now running the command show bgp summary | match 705 ");
-		if(not($o_show_bgp/bgp-peer[peer-as==705]))
-		{
-		
-			
-			expr test:Quit_Prompt_Function("\n The BGP sessions to AS 705 is not present .Please resolve the issue before continuing ");	
-		
-			
-		}
-		else
-		{
-			
-			
-	expr test:Continue_Prompt_Function("\n Please check on for any eBGP sessions with AS 705 on other plane. The same BGP sessions should exist on both planes. ");
-		}
-
-	}
-	else
-	{
-		expr jcs:output("\n No Match Found");
-	}*/
 
 	var $connection = jcs:open();
 	
@@ -1242,51 +1145,7 @@ expr test:Quit_Prompt_Function("\n Before going further please check on opposite
 	}
 
 	
-	expr jcs:output("\n Now running the command \" show isis database | match overload | match “XT|XL|BB|TL \" ");
-
-/**************************************show isis database | match overload | match “XT|XL|BB|TL*******************************************/
-
-	var $Show_Version	=	<command> "show version";
-	var $O_Show_Version	=	jcs:invoke($Show_Version);
-	var $O_Router_name	=	$O_Show_Version/host-name;
-
 	
-	var $POP_String		=	jcs:split("\\.",$O_Router_name);
-	var $Act_POP		=	substring($POP_String[2],1,3);
-	
-	expr jcs:output($Act_POP);
-	
-		
-	var $isis_database=<command> "show isis database ";
-	var $O_isis_database = jcs:invoke($isis_database);
-	
-
-	var $isis_iter=($O_isis_database/rpc-reply/isis-database-information/isis-database[level==2]/isis-database-entry[ contains(lsp-attributes,"Overload")&&( starts-with(lsp-id,"XL")|| starts-with(lsp-id,"XT")|| starts-with(lsp-id,"BB")|| starts-with(lsp-id,"TL") )]);
-
-	if($isis_iter)
-	{
-		
-			for-each($isis_iter)
-			{
-				
-				var $LOOP_POP	=jcs:split("\\.",lsp-id);
-				var $A_LOOP_POP	=substring($LOOP_POP[2],1,3);
-				if($A_LOOP_POP==$Act_POP)
-				{
-					expr jcs:output("\n Overload router" _ lsp-id _ " is in the same POP");
-					expr test:Continue_Prompt_Function();
-				}
-			}
-		
-	}
-	else
-	{
-			expr jcs:output(" No match found ");
-	}
-	
-
-
-
 	
 	expr test:Continue_Prompt_Function("\n Do you want set protocols isis overload ?");
 

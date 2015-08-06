@@ -25,10 +25,19 @@ match / {
 	
 	
 	
-	expr test:software_version();
-	expr test:Continue_Prompt_Function();
-	expr test:software_version_other_routing_engine();
-	expr test:Continue_Prompt_Function();
+	var $R_V1	= test:software_version();
+	
+	var $R_V2	= test:software_version_other_routing_engine();
+	
+	if($R_V1!=$R_V1)
+	{
+		expr test:Quit_Prompt_Function("\n Codes doesnt match on two routing engines. Please quit the script.");
+	}
+	else
+	{
+		expr jcs:output("\n Codes of both Routing Engines match ");
+	}
+	
 /*********************************************************routing engine switch*********************************************************/
 
 	
@@ -75,48 +84,37 @@ match / {
 	var $Restoral_xml_file		= $File_name ;
 	var $O_Bgp_Config		= document($Restoral_xml_file);
 /********************************************** search for xml restoral file ***************************************************************/
-	expr test:Continue_Prompt_Function("\n Do you want to check the hardware status before continuing ?");
+	expr jcs:output("\n Now showing the Pre Maintenance and Pre Maintenance hardware status  ");
 
 	expr test:Hardware-Status($Restoral_xml_file);
-	
+
+	expr test:Continue_Prompt_Function("\n Do you want to proceed further to restore the traffic ?");
 
 	
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to restore Pre Maintenance state for routing-instances ?");
 	
-/********************************************** activate routing-instances ****************************************************************/
-	
-	
-	if($O_Bgp_Config/Restoral/Restoral-Conf/configuration/routing-instances)
-	{
-		
-		expr test:Continue_Prompt_Function("\n Routing-instances is activated state Pre Maintenance.\n\n Do you want to activate routing-instances ?");
-		var $routing_instance_activate =	{
-					<configuration>{
-            					<routing-instances active="active">;
-						}
-						}
-	call jcs:load-configuration( $connection, $configuration =$routing_instance_activate);
-		
-	}
-	else
-	{
-		expr jcs:output("\n Routing-instances is not activated Pre Maintenance. Pre Maintenance state is restored");
-	}
 
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to activate routing-options ?");
+	expr test:Continue_Prompt_Function("\n Do you want to restore routing-options to pre maintenace state ?");
 
 /********************************************** activate routing-options *********************************************************************/
 	
-	var $routing_options_activate =	{
+	if($O_Bgp_Config/Restoral/Restoral-Conf/configuration/routing-options)
+	{
+		expr test:Continue_Prompt_Function(" Routing options are active pre maintenance .Do you want to activate routing options ");
+		var $routing_options_activate =	{
 					<configuration>{
             					<routing-options active="active">;
 						}
 						}
-	call jcs:load-configuration( $connection, $configuration =$routing_options_activate);
+		call jcs:load-configuration( $connection, $configuration =$routing_options_activate);
+	}
+	else
+	{
+		expr jcs:output(" Routing options state is restored ");
+	}
 
 
 	
@@ -151,7 +149,11 @@ match / {
 	
 /********************************************** Wait for krt Queue ******************************************************/
 	expr test:Show_KRT_Queue();
-/********************************************** Wait for krt Queue ******************************************************/	
+/********************************************** Wait for krt Queue ******************************************************/
+	
+	
+	expr test:Stats-Protocols($Restoral_xml_file);	
+	expr test:Continue_Prompt_Function("\n Do you want to proceed further to restore the traffic ?");
 	
 	expr test:Continue_Prompt_Function("\n Do you want to activate bgp ?");
 
@@ -246,6 +248,27 @@ match / {
 		}
 	}
 
+	expr test:Continue_Prompt_Function("\n Do you want to restore Pre Maintenance state for routing-instances ?");
+	
+/********************************************** activate routing-instances ****************************************************************/
+	
+	
+	if($O_Bgp_Config/Restoral/Restoral-Conf/configuration/routing-instances)
+	{
+		
+		expr test:Continue_Prompt_Function("\n Routing-instances is activated state Pre Maintenance.\n\n Do you want to activate routing-instances ?");
+		var $routing_instance_activate =	{
+					<configuration>{
+            					<routing-instances active="active">;
+						}
+						}
+	call jcs:load-configuration( $connection, $configuration =$routing_instance_activate);
+		
+	}
+	else
+	{
+		expr jcs:output("\n Routing-instances is not activated Pre Maintenance. Pre Maintenance state is restored");
+	}
 
 	
 	expr test:Continue_Prompt_Function("\n Do you want to activate External BGP ? ");
@@ -289,6 +312,7 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[(type=="external")&&(not(star
 	}
 
 
+
 	expr test:Diff-Statistics($Restoral_xml_file);
 	
 	var $close-results = jcs:close($connection);
@@ -299,6 +323,29 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[(type=="external")&&(not(star
 
 
 }
+
+<func:function name="test:Stats-Protocols">
+{
+
+	param $Restoral_xml_file;
+	var $Pre_Maintainence=document($Restoral_xml_file);
+	var $Post_Maintainence=test:Tree-construct();
+	expr jcs:output("\n 		show isis Adjacency");
+	expr jcs:output("*****************************************************************");
+	expr test:Diff_Isis_Adjacency($Pre_Maintainence,$Post_Maintainence);
+	
+	expr jcs:output("\n 		show ldp neighbor");
+	expr jcs:output("*****************************************************************");
+	expr test:Diff_LDP_Neighbor($Pre_Maintainence,$Post_Maintainence);
+	expr jcs:output("\n 		show ldp session");
+	expr jcs:output("*****************************************************************");
+	expr test:Diff_LDP_Sessions($Pre_Maintainence,$Post_Maintainence);
+	expr jcs:output("\n 		show mpls interfaces");
+	expr jcs:output("*****************************************************************");
+	expr test:Diff_mpls_interfaces($Pre_Maintainence,$Post_Maintainence);
+}
+
+
 
 <func:function name="test:Hardware-Status">
 {
@@ -1180,8 +1227,8 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	param $Perfect;
 	var $show_krt_queue	= <command> "show krt queue";
 	var $o_show_krt_queue	= jcs:invoke($show_krt_queue);
-	expr jcs:output(" Waiting for 10 secs");
-	expr jcs:sleep( 10 );
+	expr jcs:output(" Waiting for 60 secs");
+	expr jcs:sleep( 60 );
 	
 	
 	if($Count==0)
@@ -1260,17 +1307,18 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 {
 	var $Show_Version	= <command> "show version";
 	var $O_Show_Version	= jcs:invoke($Show_Version);
-	if($O_Show_Version/junos-version)
-	{
-		expr jcs:output("\n The version of the router is " _ $O_Show_Version/junos-version);
-	}
-	else
-	{
-		if($O_Show_Version/package-information/comment)
+	
+		if($O_Show_Version/package-information[name=="junos"]/comment)
 		{
-			expr jcs:output("\n The version of the router is " _ $O_Show_Version/package-information/comment);
+			expr jcs:output("\n The version of the router is " _ $O_Show_Version/package-information[name=="junos"]/comment);
+			var $Result=$O_Show_Version/package-information[name=="junos"]/comment;
+			<func:result select="$Result">;
 		}
-	}
+		else
+		{
+			expr test:Quit_Prompt_Function("\n The Junos version not present ");
+		}
+	
 	
 }
 
@@ -1278,17 +1326,18 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 {
 	var $Show_Version	= <command> "show version invoke-on other-routing-engine";
 	var $O_Show_Version	= jcs:invoke($Show_Version);
-	if($O_Show_Version/multi-routing-engine-item/software-information/junos-version)
+	
+	if($O_Show_Version/multi-routing-engine-item/software-information/package-information[name=="junos"]/comment)
 	{
-		expr jcs:output("\n The version of the other-routing-engine is " _ $O_Show_Version/multi-routing-engine-item/software-information/junos-version);
+		expr jcs:output("\n The version of the other-routing-engine is " _ $O_Show_Version/multi-routing-engine-item/software-information/package-information[name=="junos"]/comment);
+		var $Result	=$O_Show_Version/multi-routing-engine-item/software-information/package-information[name=="junos"]/comment;
+		<func:result select="$Result">;
 	}
 	else
 	{
-		if($O_Show_Version/multi-routing-engine-item/software-information/package-information/comment)
-		{
-			expr jcs:output("\n The version of the other-routing-engine is " _ $O_Show_Version/multi-routing-engine-item/software-information/package-information/comment);
-		}
+		expr test:Quit_Prompt_Function("\n The Junos version not present ");
 	}
+	
 	
 }
 

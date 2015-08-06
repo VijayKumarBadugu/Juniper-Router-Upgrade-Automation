@@ -29,7 +29,7 @@ match / {
 	if(test:File_Finder($File_name _ ".xml")=="yes")
 	{
 
-expr test:Quit_Prompt_Function("\n " _ $File_name _ ".xml" _ " is already present. You may be running Ugrade script twice before restoration. This is dangerous. Please Quit this script");
+expr test:Quit_Prompt_Function("\n " _ $File_name _ ".xml" _ " is already present. This means that you are running this Upgrade script twice . Running the Upgrade script again before restoring traffic will overwrite the configuration.This is dangerous. Please continue if you want to overwrite the file");
 	}
 
 /************************************** Saving the configuration at /var/home/full/  ****************************************************/
@@ -147,7 +147,7 @@ expr test:Quit_Prompt_Function("\n " _ $File_name _ ".xml" _ " is already presen
 	{
 		expr jcs:output("\n Unable to run shell command");
 		
-		expr test:Quit_Prompt_Function(" Please run \"sysctl -a | grep bootdevs\" to check whether \"compact flash\" and \"disk\" are in the bootlist");
+		expr test:Quit_Prompt_Function(" Please quit and  run \"sysctl -a | grep bootdevs\" to check whether \"compact flash\" and \"disk\" are in the bootlist and run the Upgrade.slax script again ");
 	}
      	else
 	{
@@ -1013,7 +1013,7 @@ template Traffic_Removal_Function()
 
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to run the command \" show aps\" ?");
+	expr jcs:output("\n Running the command \" show aps\" ");
 
 /********************************************** show aps *********************************************************************************/
 
@@ -1025,6 +1025,10 @@ template Traffic_Removal_Function()
 		
 		expr test:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
 	}
+	else
+	{
+		expr jcs:output(" No VOIP traffic present.");
+	}
 
 /**********************************************  *********************************************************************************/
 	
@@ -1032,7 +1036,7 @@ template Traffic_Removal_Function()
 	
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to run the command \" show bgp summary| match 1661 \" ?");
+	expr jcs:output("\n Now running the command \" show bgp summary| match 1661 \" ");
 	
 	
 	
@@ -1051,9 +1055,13 @@ template Traffic_Removal_Function()
 		
 			
 	}
+	else
+	{
+		expr jcs:output(" No VOIP traffic present.");
+	}
  
 	
-	expr test:Continue_Prompt_Function("\n Do you want to run the command \"show bfd session | match ^152\" ?");
+	expr jcs:output("\n Now running the command \"show bfd session | match ^152\" ");
 
 /********************************************** show bfd session | match ^152 ************************************************************/
 
@@ -1066,11 +1074,15 @@ template Traffic_Removal_Function()
 			expr test:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
 		
 	}
+	else
+	{
+		expr jcs:output(" No VOIP traffic present.");
+	}
 	
 	
 	
 	
-	expr test:Continue_Prompt_Function("\n Do you want to run the command \" show vrrp \" ?");
+	expr jcs:output("\n Now running the command \" show vrrp \" ");
 
 /********************************************** show vrrp ********************************************************************************/
 
@@ -1082,11 +1094,15 @@ template Traffic_Removal_Function()
 		
 		expr test:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)");
 	}
+	else
+	{
+		expr jcs:output(" No VOIP traffic present.");
+	}
 
 	
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to run the command \"show l2circuit connections\" ? ");
+	expr jcs:output("\n Now running the command \"show l2circuit connections\"  ");
 
 /********************************************** show l2circuit connections ***************************************************************/
 
@@ -1098,9 +1114,14 @@ template Traffic_Removal_Function()
 		
 		expr test:Continue_Prompt_Function("\n Look like it is XT1.SAC1 or XT2.HOU7 router ? ");
 	}
+	else
+	{
+		expr jcs:output(" No output present");
+	}
+	
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to run the command \" show mpls lsp | match sig \" ?");
+	expr jcs:output("\n Now running the command  \" show mpls lsp | match sig \" ");
 
 /********************************************** show mpls lsp | match sig ****************************************************************/
 
@@ -1112,11 +1133,19 @@ template Traffic_Removal_Function()
 			
 			expr test:Continue_Prompt_Function("\n Look like it is XT1.SAC1 or XT2.HOU7 router ");
 	}
+	else
+	{
+			expr jcs:output(" No match found in Ingress");
+	}
 	
 	if($o_show_mpls_lsp/rsvp-session-data[session-type=="Egress"]/rsvp-session[contains(name,"SIG")])
 	{
 			
 			expr test:Continue_Prompt_Function("\n Looks like it is XT1.SAC1 or XT2.HOU7 router ");
+	}
+	else
+	{
+			expr jcs:output(" No match found in Egress");
 	}
 
 	
@@ -1125,8 +1154,8 @@ template Traffic_Removal_Function()
 /********************************************** show isis adjacency | match XR ***********************************************************/
 /********************************************** show bgp summary | match 705 *************************************************************/
 
-
-
+	/*
+	expr jcs:output("\n Now running the command show isis adjacency | match XR ");
 	var $show_isis_adjacency 	= <command> "show isis adjacency";
 	var $o_show_isis_adjacency	= jcs:invoke($show_isis_adjacency);
 	
@@ -1134,13 +1163,14 @@ template Traffic_Removal_Function()
 	{
 		expr jcs:output("\n Looks like XR router is directly connected. ");
 		
-expr test:Continue_Prompt_Function("\n Before going further please check on opposite plane XR devices to make sure the ISIS adjacencies to the upstream XT/XL are up");
+expr test:Quit_Prompt_Function("\n Before going further please check on opposite plane XR devices to make sure the ISIS adjacencies to the upstream XT/XL are up");
 	
+		expr jcs:output(" Now running the command show bgp summary | match 705 ");
 		if(not($o_show_bgp/bgp-peer[peer-as==705]))
 		{
 		
 			
-			expr test:Continue_Prompt_Function("\n The BGP sessions to AS 705 is not present .Please resolve the issue before continuing ");	
+			expr test:Quit_Prompt_Function("\n The BGP sessions to AS 705 is not present .Please resolve the issue before continuing ");	
 		
 			
 		}
@@ -1152,6 +1182,10 @@ expr test:Continue_Prompt_Function("\n Before going further please check on oppo
 		}
 
 	}
+	else
+	{
+		expr jcs:output("\n No Match Found");
+	}*/
 
 	var $connection = jcs:open();
 	
@@ -1183,9 +1217,32 @@ expr test:Continue_Prompt_Function("\n Before going further please check on oppo
 	}
 /********************************************** Wait for krt Queue ******************************************************/
 	expr test:Show_KRT_Queue();
+	expr test:Continue_Prompt_Function("\n Do you want to deactivate routing-instances if configured ?");
+
+/********************************************** deactivate routing-instances *********************************************************************/
+
+	var $Routing-Instances		= <get-configuration>;
+	var $O_Routing-Instances	= jcs:invoke($Routing-Instances);
+	if($O_Routing-Instances/routing-instances)
+	{
+		expr jcs:output("\n Routing-instances are configured .");
+		
+		expr test:Continue_Prompt_Function("\n Do you want to deactivate routing-instances ?");
+		var $routing_instance_deactivate =	{
+					<configuration>{
+            					<routing-instances inactive="inactive">;
+						}
+						}
+	call jcs:load-configuration( $connection, $configuration =$routing_instance_deactivate);
+		
+	}
+	else
+	{
+		expr jcs:output("\n Routing-instances are not configured .");
+	}
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to run the command \" show isis database | match overload | match “XT|XL|BB|TL \" ?");
+	expr jcs:output("\n Now running the command \" show isis database | match overload | match “XT|XL|BB|TL \" ");
 
 /**************************************show isis database | match overload | match “XT|XL|BB|TL*******************************************/
 
@@ -1221,6 +1278,10 @@ expr test:Continue_Prompt_Function("\n Before going further please check on oppo
 				}
 			}
 		
+	}
+	else
+	{
+			expr jcs:output(" No match found ");
 	}
 	
 
@@ -1299,16 +1360,27 @@ expr test:Continue_Prompt_Function("\n Before going further please check on oppo
 	
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to deactivate routing-options ?");
+	expr test:Continue_Prompt_Function("\n Do you want to deactivate routing-options if configured ?");
 
 /********************************************** deactivate routing-options *********************************************************************/
+
+	var $Config-Routing-options	= <get-configuration>;
+	var $O-Config-Routing-options	= jcs:invoke($Config-Routing-options);
 	
-	var $routing_options_deactivate =	{
-					<configuration>{
-            					<routing-options inactive="inactive">;
-						}
-						}
-	call jcs:load-configuration( $connection, $configuration =$routing_options_deactivate);
+	if($O-Config-Routing-options/routing-options)
+	{
+		expr test:Continue_Prompt_Function("\n Routing options are active .Do you want to deactivate routing-options ?");
+		var $routing_options_deactivate =	{
+						<configuration>{
+            						<routing-options inactive="inactive">;
+							}
+							}
+		call jcs:load-configuration( $connection, $configuration =$routing_options_deactivate);
+	}
+	else
+	{
+		expr jcs:output("\n Routing Options are not configured ");
+	}
 
 
 	
@@ -1329,29 +1401,7 @@ expr test:Continue_Prompt_Function("\n Before going further please check on oppo
 
 
 
-	expr test:Continue_Prompt_Function("\n Do you want to deactivate routing-instances if configured ?");
-
-/********************************************** deactivate routing-instances *********************************************************************/
-
-	var $Routing-Instances		= <get-configuration>;
-	var $O_Routing-Instances	= jcs:invoke($Routing-Instances);
-	if($O_Routing-Instances/routing-instances)
-	{
-		expr jcs:output("\n Routing-instances are configured .");
-		
-		expr test:Continue_Prompt_Function("\n Do you want to deactivate routing-instances ?");
-		var $routing_instance_deactivate =	{
-					<configuration>{
-            					<routing-instances inactive="inactive">;
-						}
-						}
-	call jcs:load-configuration( $connection, $configuration =$routing_instance_deactivate);
-		
-	}
-	else
-	{
-		expr jcs:output("\n Routing-instances are not configured .");
-	}
+	
 
 }
 
@@ -1371,8 +1421,8 @@ expr test:Continue_Prompt_Function("\n Before going further please check on oppo
 	param $Perfect;
 	var $show_krt_queue	= <command> "show krt queue";
 	var $o_show_krt_queue	= jcs:invoke($show_krt_queue);
-	expr jcs:output(" Waiting for 10 secs");
-	expr jcs:sleep( 10 );
+	expr jcs:output(" Waiting for 60 secs");
+	expr jcs:sleep( 60 );
 	
 	
 	if($Count==0)

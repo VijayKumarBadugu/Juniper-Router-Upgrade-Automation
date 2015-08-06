@@ -25,18 +25,9 @@ match / {
 	
 	
 	
-	var $R_V1	= test:software_version();
+	expr test:software_version();
 	
-	var $R_V2	= test:software_version_other_routing_engine();
 	
-	if($R_V1!=$R_V1)
-	{
-		expr test:Quit_Prompt_Function("\n Codes doesnt match on two routing engines. Please quit the script.");
-	}
-	else
-	{
-		expr jcs:output("\n Codes of both Routing Engines match ");
-	}
 	
 /*********************************************************routing engine switch*********************************************************/
 
@@ -1310,8 +1301,26 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 		if($O_Show_Version/package-information[name=="junos"]/comment)
 		{
 			expr jcs:output("\n The version of the router is " _ $O_Show_Version/package-information[name=="junos"]/comment);
-			var $Result=$O_Show_Version/package-information[name=="junos"]/comment;
-			<func:result select="$Result">;
+			var $Result_Master=$O_Show_Version/package-information[name=="junos"]/comment;
+			
+			var $Show_Version_other	= <command> "show version invoke-on other-routing-engine";
+			var $O_Show_Version_other	= jcs:invoke($Show_Version_other);
+	
+			if($O_Show_Version_other/multi-routing-engine-item/software-information/package-information[name=="junos"]/comment)
+			{
+				var $Result_Backup	=$O_Show_Version_other/multi-routing-engine-item/software-information/package-information[name=="junos"]/comment;
+				expr jcs:output("\n The version of the other-routing-engine is " _ $Result_Backup);
+				if($Result_Backup!=$Result_Master)
+				{
+					expr test:Quit_Prompt_Function("\n Codes doesnt match on two routing engines. Please quit the script.");
+				}
+		
+		
+			}
+			else
+			{
+				expr test:Quit_Prompt_Function("\n The Junos version not present on other routing engine");
+			}
 		}
 		else
 		{

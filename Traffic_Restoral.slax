@@ -113,7 +113,7 @@ match / {
 	}
 	else
 	{
-		expr jcs:output(" Routing options state is restored ");
+		expr jcs:output(" Routing options state are not active pre maintenance.So no changes to be made to routing options ");
 	}
 
 
@@ -286,8 +286,7 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[(type=="external")&&(not(star
 			
 		if($O_Bgp_Config/Restoral/Restoral-Conf/configuration/protocols/bgp/group[(not(@inactive))&&(name==$Temp_bgp_grp)])
 		{	
-			/*if(not($O_Bgp_Config/configuration/protocols/bgp/group[(@inactive)]))
-			{*/
+			
 				expr jcs:output("\n Now activating bgp group " _ name _ " with peer-as " _ peer-as);
 					var $bgp_group_activate_configuration={
 						<configuration> {
@@ -302,7 +301,7 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[(type=="external")&&(not(star
 		    						}
 					  		}
 			call jcs:load-configuration( $connection, $configuration = $bgp_group_activate_configuration);
-			/*}*/
+			
 	
 		}
 
@@ -1442,7 +1441,7 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 <func:function name="test:XML_Path_Finder">
 {
 	
-		var $Source_File		=jcs:get-input("\n Please enter the xml file name ");/*"jinstall64-13.3R3-S8.2-domestic-signed.tgz";*/
+		var $Source_File		=jcs:get-input("\n Please enter the xml file name ");
 		expr jcs:output("\n Downloading the xml file " _ $Source_File);
 		var $Destination_File	="/var/home/full/" _ $Source_File;	
 		var $Success_Destination_File = test:FTP_File_Transfer_Software($Source_File,$Destination_File);	

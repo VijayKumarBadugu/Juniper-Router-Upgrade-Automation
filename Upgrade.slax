@@ -8,34 +8,53 @@ ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
 ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
 ns adv = "http://xml.juniper.net/adventure";
 ns func extension = "http://exslt.org/functions";
-ns test = "http://xml.juniper.net/test";
+ns automation = "http://xml.juniper.net/automation";
 ns exsl extension = "http://exslt.org/common";
 
 import "../import/junos.xsl";
+
+/*
+ * Author        : Vijay Kumar Badugu
+ * Version       : 1.0
+ * Last Modified : August 6, 2015
+ * Description   : The purpose of this op script is do preliminary checks and remove the traffic for BR router.
+ *		   
+ *
+ *==========================================================================================================
+ * To set this script up on your JUNOS device copy this script to the following folder:
+ * /var/run/scripts/op
+ *			
+ * Then configure JUNOS with the following :
+ * set system scripts op file Upgrade.slax
+ *
+ */
+
 match / {
 	
 	expr jcs:output("\n \n Welcome to Router Upgradation MOP ");
 	
-	expr test:Continue_Prompt_Function("\n This script removes the traffic and sets the router in overload ");
+	expr automation:Continue_Prompt_Function("\n This script removes the traffic and sets the router in overload ");
 	
-	var $File_name		= test:File_Name_Creater();
+	/* Creates File_name using automation:File_Name_Creater(); The pre maintenance configuration of router is saved with this name at "/var/home/full/".*/
+	var $File_name		= automation:File_Name_Creater();
 
 	
 
 /************************************** Checking whether script is being re run ****************************************************/
 
 	
-
-	if(test:File_Finder($File_name _ ".xml")=="yes")
+	/* The following logic checks whether ($File_name).xml is present in "/var/home/full/" .If this file is already present that means that the Upgrade.slax script
+is running again in the same day.If the Traffic is not restored previously before running this script will overwrite the configuration,by which the original configuration state of the router will be lost*/
+	if(automation:File_Finder($File_name _ ".xml")=="yes")
 	{
 
-expr test:Quit_Prompt_Function("\n " _ $File_name _ ".xml" _ " is already present. This means that you are running this Upgrade script twice . Running the Upgrade script again before restoring traffic will overwrite the configuration.This is dangerous. Please continue if you want to overwrite the file");
+expr automation:Quit_Prompt_Function("\n " _ $File_name _ ".xml" _ " is already present. This means that you are running this Upgrade script twice . Running the Upgrade script again before restoring traffic will overwrite the configuration.This is dangerous. Please continue if you want to overwrite the file");
 	}
 
-/************************************** Saving the configuration at /var/home/full/  ****************************************************/
+/************************************** Saving the configuration at /var/home/full/$File_name  ****************************************************/
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to save the configuration at /var/home/full/" _ $File_name _ " ?");
+	expr automation:Continue_Prompt_Function("\n Do you want to save the configuration at /var/home/full/" _ $File_name _ " ?");
 
 	
 	var $Save_Configuration 	= <get-configuration format="text"> ;
@@ -50,11 +69,13 @@ expr test:Quit_Prompt_Function("\n " _ $File_name _ ".xml" _ " is already presen
 
 	var $result-writing 		= jcs:invoke( $writing );
 
+	/* Check whether writing pre maintenance configuration of the router to  "/var/home/full/" _ $File_name  is successful*/
+
 	if($result-writing//self::xnm:error || $result-writing//self::xnm:warning)
 	{
 		expr jcs:output($result-writing);
 		
-		expr test:Quit_Prompt_Function("\n File transfer failed !.Please exit the script and check if the path /var/home/full/ is valid ");
+		expr automation:Quit_Prompt_Function("\n File transfer failed !.Please exit the script and check if the path /var/home/full/ is valid ");
 	
 	}
 
@@ -63,63 +84,71 @@ expr test:Quit_Prompt_Function("\n " _ $File_name _ ".xml" _ " is already presen
 /**************************************Saving the config at backup routing engine ****************************************************/
 	
 	
-	expr test:Continue_Prompt_Function("\n Do you want to save the configuration in back-up routing engine at /var/home/full/" _ $File_name _ " ?");
+expr automation:Continue_Prompt_Function("\n Do you want to save the configuration in other routing engine at " _ automation:Other_Routing_Engine_Finder() _ " /var/home/full/" _ $File_name _ " ?");
+
+	/* Transfer the pre maintenance configuration of the router to other routing engine*/
 		
-	expr test:Routing_Engine_File_Transfer("/var/home/full/" _ $File_name,test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_name);
+	expr automation:Routing_Engine_File_Transfer("/var/home/full/" _ $File_name,automation:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_name);
 
 
 
 
 
 
-/**************************Searching for the install file and dowloading from back up if not present*************************************/
+/**************************Search for the available JUNOS code in "/var/home/full/" and download from other routing engine if not present *************************************/
 /****************************************************************************************************************************************/
 	
 	
 
-	var $Image_File_Path 		= test:Search_Image_File();
+	var $Image_File_Path 		= automation:Search_Image_File();
 	
 
 
 
 /***********************************************show system storage***********************************************************************/
-
+/*The following logic check whether the router is booted from flash disk . Use "show system storage" and ensure the router properly 
+			booted from the flash disk.This would be indicated by “ad0xxx” mounted on “/”.
+			( JUNOS 13-3R3-S8 - MX - Code Upgrade document,chapter 5.2)*/
 	
-	expr test:Continue_Prompt_Function("\n Do you want to check whether the router is properly booted from flash disk ?" );
+	expr jcs:output("\n Checking whether the router is properly booted from flash disk " );
 
 	var $Show_System_Storage	= <command> "show system storage";
 	var $O_Show_System_Storage	= jcs:invoke($Show_System_Storage);
-	var $Com-Mounted-on	= "Test" _ "/";
+	var $Com-Mounted-on	= substring("/config",1,1); 
 	
-	
+	/*Search for file system containing "ad0" . */
 	if($O_Show_System_Storage/filesystem[contains(filesystem-name,"ad0")])
 	{
-		var $Mounted-on		= "Test" _ $O_Show_System_Storage/filesystem[contains(filesystem-name,"ad0")]/mounted-on;
+		var $Mounted-on		= $O_Show_System_Storage/filesystem[contains(filesystem-name,"ad0")]/mounted-on;
 		var $File-system-name	= $O_Show_System_Storage/filesystem[contains(filesystem-name,"ad0")]/filesystem-name;
 	
+		/* compare whether file-system ad0xxx is mounted on "/"*/
 		if( $Mounted-on==$Com-Mounted-on)
 		{
-			expr jcs:output("\n File system " _ $File-system-name _ " mounted-on " _ substring($Mounted-on,5,5));
+			expr jcs:output("\n File system " _ $File-system-name _ " mounted-on " _ $Mounted-on);
 			expr jcs:output("\n The router is properly booted from flash disk ");
 			
 		}
 		else
 		{
-			expr jcs:output("\n File system " _ $File-system-name _ " mounted-on " _ substring($Mounted-on,5,5));
+			/* Error prompt if ad0xxx is not mounted on "/" */
+			expr jcs:output("\n File system " _ $File-system-name _ " mounted-on " _ $Mounted-on);
 			
-		expr test:Quit_Prompt_Function("\n The router is not properly booted from flash disk .Please quit and debug the issue before the software upgrade");
+		expr automation:Quit_Prompt_Function("\n The router is not properly booted from flash disk .Please quit and debug the issue before the software upgrade");
 		}
 	}
 	else
 	{
-		
-		expr test:Quit_Prompt_Function(" The ad0 file system is not present .Please quit and debug the issue before the software upgrade");
+		/* Error prompt if ad0 file system not present*/
+		expr automation:Quit_Prompt_Function(" The ad0 file system is not present .Please quit and debug the issue before the software upgrade");
 	}
 
 /**************************************Ensure the “compact flash” and “disk” are in the bootlist:*****************************************/
-
+/*The following ensure the “compact flash” and “disk” are in the bootlist .Use "sysctl –a | grep bootdev" and 
+			interrupt the program if “compact flash” and “disk” are not present in the bootlist.
+	*/
 	
-	expr test:Continue_Prompt_Function("\n Do you want to check whether “compact flash” and “disk” are in the bootlist ? " );
+	expr jcs:output("\n Checking whether “compact flash” and “disk” are in the bootlist ? " );
 
 	var $connection = jcs:open();
         var $sysctl_bootdev = {
@@ -128,17 +157,20 @@ expr test:Quit_Prompt_Function("\n " _ $File_name _ ".xml" _ " is already presen
 			
             }
         }
+	/* run the shell command.*/
         var $o_sysctl_bootdev = jcs:execute($connection,$sysctl_bootdev);
+
+	/* If unable to execute shell commands. Give an error prompt saying  unable to run shell command and ask the user to abort script and run "sysctl -a | grep bootdevs" command and check whether “compact flash” and “disk”  is in bootlist. Then re run the Upgrade script and enter continue at this function if “compact flash” and “disk”  are in bootlist*/
 	
 	if(contains($o_sysctl_bootdev,"error"))
 	{
 		expr jcs:output("\n Unable to run shell command");
 		
-		expr test:Quit_Prompt_Function(" Please quit and  run \"sysctl -a | grep bootdevs\" to check whether \"compact flash\" and \"disk\" are in the bootlist and run the Upgrade.slax script again ");
+		expr automation:Quit_Prompt_Function(" Please quit and  run \"sysctl -a | grep bootdevs\" and check whether \"compact flash\" and \"disk\" are in the bootlist.Please re-run the Upgrade.slax script if compact flash and disk are present in bootlist .Enter continue if you are sure that \"compact flash\" and \"disk\" are in the bootlist. ");
 	}
      	else
 	{
-     
+     	/* Check if compact-flash  and disk are in boot-list*/
         if((contains($o_sysctl_bootdev,"compact-flash") && contains($o_sysctl_bootdev,"disk")))
 	{
 		expr jcs:output($o_sysctl_bootdev);
@@ -146,8 +178,8 @@ expr test:Quit_Prompt_Function("\n " _ $File_name _ ".xml" _ " is already presen
 	}
 	else
 	{
-		
-expr test:Quit_Prompt_Function("\n Please quit and use (sysctl -w machdep.bootdevs=pcmcia-flash,compact-flash,disk,lan) in super user mode to add compact-flash and disk in the bootlist  ");
+	/* Raise an Error prompt if "compact-flash" and "disk" are not present in boot-list*/	
+expr automation:Quit_Prompt_Function("\n Please quit and use (sysctl -w machdep.bootdevs=pcmcia-flash,compact-flash,disk,lan) in super user mode to add compact-flash and disk in the bootlist  ");
 			
             					
 	}
@@ -155,27 +187,30 @@ expr test:Quit_Prompt_Function("\n Please quit and use (sysctl -w machdep.bootde
 	}
 /********************************************************* Traffic maintenence************************************************************/
 	
-	expr test:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence state at /var/home/full/" _ $File_name _ ".xml");
+	expr automation:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence state at /var/home/full/" _ $File_name _ ".xml");
 
 	
 	
-
-	expr test:Configuration_Xml_Saved($File_name _ ".xml");
+	/* Before removing the traffic pre Maintenence state of the router should be saved. Configuration_Xml_Saved creates a xml with name 
+	 ($File_name).xml which contains pre maintenence state of the router*/
+	expr automation:Configuration_Xml_Saved($File_name _ ".xml");
 	call Traffic_Removal_Function();
 
 /*********************************************************request system snapshot*********************************************************/
 
-	
-	expr test:Continue_Prompt_Function("\n Do you want to run \"request system snapshot\" ? " );
+	/* Run request system snapshot on main routing engine*/
+	expr automation:Continue_Prompt_Function("\n Do you want to run \"request system snapshot\" ? " );
 
 	var $request_system_snapshot	= <command> "request system snapshot";
 	var $o_request_system_snapshot	= jcs:invoke($request_system_snapshot);
 	
+	/* check whether running "request system snapshot" returned error while executing*/
 	if($o_request_system_snapshot//self::xnm:error || $o_request_system_snapshot//self::xnm:warning)
 	{
+		/* Error prompt if any error ocurred when the command is executing*/
 		expr jcs:output("\n Error in executing request system snap shot ");
 		
-		expr test:Quit_Prompt_Function("\n Please Quit this quit and activate the traffic using restoral.slax script");
+		expr automation:Quit_Prompt_Function("\n Please Quit this quit and activate the traffic using restoral.slax script");
 		
 	}
 	else
@@ -183,25 +218,29 @@ expr test:Quit_Prompt_Function("\n Please quit and use (sysctl -w machdep.bootde
 		var $Comp	= "/config";
 		var $Comp_var	= substring($Comp,1,1);
 		
-		
+		/* Check whether software archived at the /altroot and /altconfig file systems */
+		/* Search the output of "request system snapshot" and check "/config" is present in archived-directory-list */
 		if(($o_request_system_snapshot/archived-directory-list[directory-name=="/config"]))
 		{
+			/* Search the output of "request system snapshot" and check "/" is present in archived-directory-list */
 			if($o_request_system_snapshot/archived-directory-list[directory-name==$Comp_var])
 			{
-				expr jcs:output("\n The software and configuration are archived onto the /altroot and /altconfig file systems ");
+				expr jcs:output("\n The software archived at the /altroot and /altconfig file systems ");
 			}
 			else
 			{
-				expr jcs:output("\n The software and configuration are not archived onto the /altroot ");
+				/* Error prompt if "/" is not present in archived-directory-list  */
+				expr jcs:output("\n The software is not archived at the /altroot ");
 				
-		expr test:Quit_Prompt_Function("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
+		expr automation:Quit_Prompt_Function("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
 			}
 		}
 		else
 		{
-			expr jcs:output("\n The software and configuration are not archived onto the /altconfig file systems ");
+			/* Error prompt if "/config" is not present in archived-directory-list  */
+			expr jcs:output("\n The software is not archived at the /altconfig file systems ");
 			
-		expr test:Quit_Prompt_Function("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
+		expr automation:Quit_Prompt_Function("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
 			
 		}
 	}
@@ -209,8 +248,10 @@ expr test:Quit_Prompt_Function("\n Please quit and use (sysctl -w machdep.bootde
 /*********************************************************request system snapshot other routing engine*********************************************************/
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to run \"request system snapshot\" at other routing engine ? " );
-	expr test:snapshot_other_routing_engine();
+	expr automation:Continue_Prompt_Function("\n Do you want to run \"request system snapshot\" at other routing engine ? " );
+	
+	/* Run request system snapshot on other routing engine*/
+	expr automation:snapshot_other_routing_engine();
 
 
 
@@ -231,66 +272,91 @@ expr test:Quit_Prompt_Function("\n Please quit and use (sysctl -w machdep.bootde
 
 
 
-<func:function name="test:snapshot_other_routing_engine">
+<func:function name="automation:snapshot_other_routing_engine">
 {
 	var $request_system_snapshot	= <command> "request system snapshot routing-engine other";
 	var $o_request_system_snapshot	= jcs:invoke($request_system_snapshot);
 	
+	/* check whether running "request system snapshot routing-engine other" returned error while executing*/
 	if($o_request_system_snapshot//self::xnm:error || $o_request_system_snapshot//self::xnm:warning)
 	{
-		expr jcs:output("\n Error in executing request system snap shot ");
+		/* Error prompt if any error ocurred when the command is executing*/
+		expr jcs:output("\n Error in executing request system snap shot routing-engine other");
 		
-		expr test:Quit_Prompt_Function("\n Please Quit this quit and activate the traffic using restoral.slax script");
+		expr automation:Quit_Prompt_Function("\n Please Quit this quit and activate the traffic using restoral.slax script");
 		
 	}
 	else
 	{
+		/* Check whether software archived at the /altroot and /altconfig file systems */
+		
+
 		var $Comp	= "/config";
 		var $Comp_var	= substring($Comp,1,1);
 		
-		
+		/* Search the output of "request system snapshot" and check "/config" is present in archived-directory-list */
 		if(($o_request_system_snapshot/multi-routing-engine-item/snapshot-information/archived-directory-list[directory-name=="/config"]))
 		{
+			/* Search the output of "request system snapshot" and check "/" is present in archived-directory-list */
 			if($o_request_system_snapshot/multi-routing-engine-item/snapshot-information/archived-directory-list[directory-name==$Comp_var])
 			{
-				expr jcs:output("\n The software and configuration are archived onto the /altroot and /altconfig file systems ");
+				expr jcs:output("\n The software  archived at the /altroot and /altconfig file systems ");
 			}
 			else
 			{
-				expr jcs:output("\n The software and configuration are not archived onto the /altroot ");
+				/* Error prompt if "/" is not present in archived-directory-list  */
+				expr jcs:output("\n The software is are not archived at the /altroot ");
 				
-		expr test:Quit_Prompt_Function("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
+		expr automation:Quit_Prompt_Function("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
 			}
 		}
 		else
 		{
-			expr jcs:output("\n The software and configuration are not archived onto the /altconfig file systems ");
+			/* Error prompt if "/config" is not present in archived-directory-list  */
+			expr jcs:output("\n The software is not archived at the /altconfig file system ");
 			
-		expr test:Quit_Prompt_Function("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
+		expr automation:Quit_Prompt_Function("\n The Routing Engine should be replaced. Please Quit this quit and activate the traffic using restoral.slax script");
 			
 		}
 	}
 
 }
 
-
-<func:function name="test:View_System_Running">
+/*
+View_System_Running allows the user to check the operational status of the router by making user run operational commands on the router from script
+*/
+<func:function name="automation:View_System_Running">
 {
 	
-		var $Command = jcs:get-input("\n Please enter the command ");
+		var $Command = jcs:get-input("\n Please enter the command ");/* Get the command from the user*/
 		var $Show_Command = <command> $Command;
-		var $O_Show_Command =  jcs:invoke($Show_Command);
-		expr jcs:output($O_Show_Command);
+		var $O_Show_Command =  jcs:invoke($Show_Command);	/*invoke the user entered command*/
+		expr jcs:output($O_Show_Command);			/* show the output*/
 		
 		
 }
 
 
+/* Tree-construct constructs a node set which contains output of following commands and configuration of the router
+			a)		show chassis fpc pic-status
+			b)		show isis Adjacency
+			c)		show bgp summary
+			d)		show ldp neighbor
+			e)		show ldp session
+			f)		show bfd session
+			g)		show interface description
+			i)		show mpls interfaces
+			j)		show rsvp interfaces
+			k)		show chassis alarms
+			l)		show mpls terse
+			m)		show route summary
+			n)		show chassis environment
+*/
 
 
-
-<func:function name="test:Tree-construct">
+<func:function name="automation:Tree-construct">
 {
+	/* Get the outputs of the above commands and configuration*/
 	var $xml_config			= <get-configuration format="xml">;
 	var $o_xml_config		= jcs:invoke($xml_config);
 	var $fpc-pic-status		= <command> "show chassis fpc pic-status";
@@ -332,14 +398,15 @@ expr test:Quit_Prompt_Function("\n Please quit and use (sysctl -w machdep.bootde
 	var $show_chassis_environment	= <command> "show chassis environment";
 	var $o_show_chassis_environment	= jcs:invoke($show_chassis_environment);
 
-
+	/* Constructing the node-set tree containing all the outputs*/
 var $content := {
 			<Restoral> {
 				<Restoral-Conf>{
-					copy-of $o_xml_config;
+					copy-of $o_xml_config;		/*pre maintenance configuration is added to node-set here*/
 					
 					}
-				<Restoral-Chassis-Environment>{		for-each($o_show_chassis_environment/environment-item)
+				<Restoral-Chassis-Environment>{		/*pre maintenance output of  "show chassis environment" is added to node-set here*/
+								for-each($o_show_chassis_environment/environment-item)
 									{
 										 <environment-item>
 											{
@@ -352,7 +419,7 @@ var $content := {
 								}
 				<Restoral-route-summary>{
 
-
+									/*pre maintenance output of  "show route summary" is added to node-set here*/
 							for-each($o_show_route/route-table)
 							{
 								<route-table>
@@ -365,7 +432,7 @@ var $content := {
 							}
 						
 							}
-				<Restoral-mpls-terse>{
+				<Restoral-mpls-terse>{			/*pre maintenance output of  "show mps lsp terse" is added to node-set here*/
 							for-each($o_show_mpls_lsp_terse/rsvp-session-data)
 							{
 								<rsvp-session-data>
@@ -383,7 +450,7 @@ var $content := {
 
 
 						    }
-				<Restoral-Chassis-alarms>{
+				<Restoral-Chassis-alarms>{		/*pre maintenance output of  "show chassis alarms" is added to node-set here*/
 								for-each($o_show_chassis_alarms/alarm-summary)
 								{
 									 <alarm-summary>{
@@ -411,6 +478,7 @@ var $content := {
 							
 				
 				<Restoral-rsvp-interface>	{
+									/*pre maintenance output of  "show rsvp interfaces" is added to node-set here*/
 									for-each($o_show_rsvp_int/rsvp-interface)
 									{
 										<rsvp-interface>
@@ -423,6 +491,7 @@ var $content := {
 								}
 
 				<Restoral-mpls-interface>	{
+									/*pre maintenance output of "show mpls interfaces" is added to node-set here*/
 									for-each($o_show_mpls_int/mpls-interface)
 									{
 										<mpls-interface>{
@@ -432,6 +501,7 @@ var $content := {
 									}
 								}
 				<Restoral-int-desc>	{
+									 /*pre maintenance output of "show interface descriptions" is added to node-set here*/
 								for-each($o_show_interface_des/physical-interface)
 								{
 									<physical-interface>{
@@ -443,7 +513,7 @@ var $content := {
 									
 							}
 
-				<Restoral-bfd>	{
+				<Restoral-bfd>	{			/*pre maintenance output of "show bfd session" is added to node-set here*/
 							for-each($o_show_bfd/bfd-session)
 							{
 							<bfd-session>{
@@ -458,7 +528,7 @@ var $content := {
 							}
 						}
 				
-				<Restoral-ldp-session>	{
+				<Restoral-ldp-session>	{		/*pre maintenance output of "show ldp session" is added to node-set here*/
 								for-each($o_ldp_session/ldp-session)
 								{
 									<ldp-session>{
@@ -473,7 +543,7 @@ var $content := {
 									
 							}
 
-				<Restoral-ldp-neighbor>	{
+				<Restoral-ldp-neighbor>	{		/*pre maintenance output of "show ldp neighbor" is added to node-set here*/
 								for-each($o_ldp_neighbor/ldp-neighbor)
 								{
 									 <ldp-neighbor>{
@@ -486,7 +556,7 @@ var $content := {
 									
 							}
 
-				<Restoral-Bgp>	{
+				<Restoral-Bgp>	{			/*pre maintenance output of "show bgp summary" is added to node-set here*/
 								for-each($o_get-bgp/bgp-peer)
 								{
 									<bgp-peer>{
@@ -499,7 +569,7 @@ var $content := {
 									
 								
 						}
-				<Restoral-Isis>	{
+				<Restoral-Isis>	{			/*pre maintenance output of "show isis adjacency" is added to node-set here*/
 							for-each($o-get-isis-adjacency/isis-adjacency)
 							{
 							<isis-adjacency>{
@@ -514,7 +584,7 @@ var $content := {
 				
 				
 
-				<Restoral-fpc-pic>	{
+				<Restoral-fpc-pic>	{		/*pre maintenance output of "show fpc pic status" is added to node-set here*/
 								 	for-each($o_fpc-pic-status/fpc)
 									{
 										<fpc>{
@@ -542,14 +612,44 @@ var $content := {
 }
 
 
+/*Configuration_Xml_Saved function creates a xml file that contains pre maintenance configuration of the router with output of following commands
+			a)		show chassis fpc pic-status
+			b)		show isis Adjacency
+			c)		show bgp summary
+			d)		show ldp neighbor
+			e)		show ldp session
+			f)		show bfd session
+			g)		show interface description
+			i)		show mpls interfaces
+			j)		show rsvp interfaces
+			k)		show chassis alarms
+			l)		show mpls terse
+			m)		show route summary
+			n)		show chassis environment
+*/
 
-
-<func:function name="test:Configuration_Xml_Saved">
+<func:function name="automation:Configuration_Xml_Saved">
 {
 
 	param $File_Name;
 	var $File_Name_Xml=$File_Name;
-	var $content=test:Tree-construct();
+	
+	/* Tree-construct constructs a node set which contains output of following commands and configuration of the router
+			a)		show chassis fpc pic-status
+			b)		show isis Adjacency
+			c)		show bgp summary
+			d)		show ldp neighbor
+			e)		show ldp session
+			f)		show bfd session
+			g)		show interface description
+			i)		show mpls interfaces
+			j)		show rsvp interfaces
+			k)		show chassis alarms
+			l)		show mpls terse
+			m)		show route summary
+			n)		show chassis environment
+	*/
+	var $content=automation:Tree-construct();
 
 
 	
@@ -559,7 +659,7 @@ var $content := {
 	 		
 	
 
-	
+	/* saving the node set $content in "/var/tmp/($File_Name).xml */
 	<xsl:document href="/var/tmp/" _ $File_Name method="xml" indent="yes"> {
 
 						copy-of $content;
@@ -568,32 +668,41 @@ var $content := {
 	
 	
 
-	
+	/* copying  "/var/tmp/($File_Name).xml to "/var/home/full/($File_Name).xml*/
 	var $xml-file-copy	=<file-copy> {
      			 		<source> "/var/tmp/" _ $File_Name_Xml;
       					<destination> "/var/home/full/" _ $File_Name_Xml;
 						
     					}
 	
+	/*Checking whether file transfer is successfull"*/
 	var $results-xml = jcs:invoke($xml-file-copy);
 	if ($results-xml//self::xnm:error || $results-xml//self::xnm:warning)
 	{
 		expr jcs:output($results-xml);
 		
-		expr test:Quit_Prompt_Function("\n File transer failed ! Please quit and check connections ");
+		expr automation:Quit_Prompt_Function("\n File transer failed ! Please quit and check connections ");
 	}
 	
 	
 
-	
-expr test:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence state at " _ test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_Name_Xml);
-	expr test:Routing_Engine_File_Transfer("/var/home/full/" _ $File_Name_Xml,test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_Name_Xml);
+	/* transfering the xml file file to back up routing engine at "/var/home/full/"*/
+expr automation:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence state at " _ automation:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_Name_Xml);
+	expr automation:Routing_Engine_File_Transfer("/var/home/full/" _ $File_Name_Xml,automation:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $File_Name_Xml);
 }
 
-<func:function name="test:File_Finder_BackUp">
+
+/**
+
+File_Finder_BackUp function checks whether $File_name is present in other routing engine at "/var/home/full/".
+It returns "yes" if file is present
+It returns "no" if file is absent
+
+*/
+<func:function name="automation:File_Finder_BackUp">
 {
 	param $File_name;
-	var $Code_path_file		= test:Other_Routing_Engine_Finder() _ ":/var/home/full/";
+	var $Code_path_file		= automation:Other_Routing_Engine_Finder() _ ":/var/home/full/";
 	expr jcs:output("\n Searching for code file if exists on router at " _ $Code_path_file);
 	var $File_Search		=  <file-list>{			
 						<path> $Code_path_file;
@@ -616,7 +725,16 @@ expr test:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence s
 }
 
 
-<func:function name="test:File_Finder">
+
+/*
+
+File_Finder function searches whether file with the name $File_name is present at "/var/home/full/" path.
+It returns 	"yes" if file is present
+		"no" if file not present
+
+*/
+
+<func:function name="automation:File_Finder">
 {
 	param $File_name;
 	var $Code_path_file		= "/var/home/full/";
@@ -639,8 +757,14 @@ expr test:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence s
 	}
 }
 
+/*
 
-<func:function name="test:Search_Image_File">
+	Search_Image_File Functions searches for all the available JUNOS code file that are present in "/var/home/full"
+	List out all the JUNOS code file and let the user choose JUNOS code file from the list.If the user chooses that 
+	the required image file is not present.Then Image_File_Search_Backup function is called
+*/
+
+<func:function name="automation:Search_Image_File">
 {
 	var $Code_path_file		= "/var/home/full/";
 	expr jcs:output("\n Searching for code file if exists on router at " _ $Code_path_file);
@@ -649,30 +773,35 @@ expr test:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence s
 					}
 	var $O_File_Search		= jcs:invoke($File_Search);
 	
-
+	/* Search if files that start with jinstall and ends with tgz are present in "/var/home/full/" */
 	if($O_File_Search/directory/file-information[starts-with(file-name,"jinstall") && contains(file-name,".tgz")])
 	{
 		expr jcs:output("\n Software Image files are present ! Please choose the required Image file \n\n");
 		
+		/*Display  all the files that start with jinstall and ends with tgz*/
 		for-each($O_File_Search/directory/file-information[starts-with(file-name,"jinstall") && contains(file-name,".tgz")])
 		{
 			expr jcs:output("\n " _ file-name);
 		}
 		
+		/* Prompt to the user to ask whether the required code file is present */
 		var $Image_Option = jcs:get-input("\n Did you find the required Image file (yes/no) ? ");
 		
 		if($Image_Option=="yes")
-		{
+		{	/* Take the file name from the user*/
 			var $Image_File	= jcs:get-input("\n Please give the image file name ");
+			/*Search whether the user choosen file is present in "/var/home/full/*/
 			if($O_File_Search/directory/file-information[file-name==$Image_File])
 			{
 				expr jcs:output("\n Checking the Image file whether it is present in the backup routing engine");
 				var $Source_File 	= "/var/home/full/" _ $Image_File;
-				if(test:File_Finder_BackUp($Image_File) == "no")
+				/*Check whether the selected code file is also in back up routing engine*/
+				if(automation:File_Finder_BackUp($Image_File) == "no")
 				{
 					
-					var $Destination_File	= test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $Image_File;
-					expr test:Routing_Engine_File_Transfer($Source_File,$Destination_File);
+					var $Destination_File	= automation:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $Image_File;
+					/* Transfer the code file to other routing engine*/
+					expr automation:Routing_Engine_File_Transfer($Source_File,$Destination_File);
 				}
 				
 				<func:result select="$Source_File">;
@@ -681,10 +810,10 @@ expr test:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence s
 			}
 			else
 			{
-				
-				expr test:Quit_Prompt_Function("\n You choose a file that is not present .");
+			/* If the file name entered by the user is not present . call Search_Image_File which again displays all the files present in "/var/home/full/"*/
+				expr automation:Quit_Prompt_Function("\n You choose a file that is not present .");
 				expr jcs:output("\n Please retry");
-				var $Image_File_Path 	=  test:Search_Image_File();
+				var $Image_File_Path 	=  automation:Search_Image_File();
 				<func:result select="$Image_File_Path">;
 				
 			}
@@ -692,16 +821,19 @@ expr test:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence s
 		}
 		else
 		{
+			/*If the file is not present in main routing engine. the following logic will call Image_File_Search_Backup .Which will search for JUNOS code 
+			  in other routing engine*/
 			if($Image_Option=="no")
 			{
 				expr jcs:output("\n Searching for image file in back up routing engine");
-				var $Image_File_Path 	=   test:Image_File_Search_Backup();
+				var $Image_File_Path 	=   automation:Image_File_Search_Backup();
 				<func:result select="$Image_File_Path">;
 			}
 			else
 			{
+		/*If wrong option is entered then Search_Image_File function is called again this will display all the available images in the "/var/home/full/"*/
 				expr jcs:output("\n Please retry");
-				var $Image_File_Path 	=   test:Search_Image_File();
+				var $Image_File_Path 	=   automation:Search_Image_File();
 				<func:result select="$Image_File_Path">;	
 			}
 
@@ -713,9 +845,9 @@ expr test:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence s
 	}
 	else
 	{
-		
+		/* If main routing engine doesnt contain any JUNOS code at "/var/home/full/" then other routing engine is searched for available JUNOS code*/
 		expr jcs:output("\n Searching for image file in back up routing engine");
-		var $Image_File_Path 	=   test:Image_File_Search_Backup();
+		var $Image_File_Path 	=   automation:Image_File_Search_Backup();
 		<func:result select="$Image_File_Path">;
 		
 			
@@ -724,12 +856,15 @@ expr test:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence s
 	}
 
 }
+/*
+Image_File_Search_Backup : This function searches for all the available codes that are present in other routing engine and enables user to select the
+required JUNOS code	
+*/
 
 
-
-<func:function name="test:Image_File_Search_Backup">
+<func:function name="automation:Image_File_Search_Backup">
 {
-	var $Code_path_file		= test:Other_Routing_Engine_Finder() _ ":/var/home/full/";
+	var $Code_path_file		= automation:Other_Routing_Engine_Finder() _ ":/var/home/full/";
 	expr jcs:output("\n Searching for code file if exists on router at " _ $Code_path_file);
 	var $File_Search		=  <file-list>{			
 						<path> $Code_path_file;
@@ -737,45 +872,47 @@ expr test:Continue_Prompt_Function("\n Do you want to save the Pre Maintenence s
 	var $O_File_Search		= jcs:invoke($File_Search);
 	
 
-	
+	/* Searching in other routing engine .If they are any JUNOS code files in "/var/home/full/" */	
 if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-information[starts-with(file-name,"jinstall") && contains(file-name,".tgz")])
 	{
 		expr jcs:output("\n Software Image files are present ! Please choose the required Image file \n\n");
-		
+		/*If files present the for-each loop below displays all the available JUNOS code*/
 	for-each($O_File_Search/multi-routing-engine-item/directory-list/directory/file-information[starts-with(file-name,"jinstall") && contains(file-name,".tgz")])
 		{
 			expr jcs:output("\n " _ file-name);
 		}
-		
+			/* Prompting the user whether the required file is present or not*/
 		var $Image_Option = jcs:get-input("\n Did you find the required Image file? ");
 		
 		if($Image_Option=="yes")
-		{
+		{	/*If user enters yes the get file name from user*/
 			var $Image_File	= jcs:get-input("\n Please give the image file name ");
+			/* Search whether user has entered correct file name*/
 			if($O_File_Search/multi-routing-engine-item/directory-list/directory/file-information[file-name==$Image_File])
 			{
-				
-					var $Source_File 	= test:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $Image_File;
+					/*If the file is correct .Transfer the selected code to main routing engine and reture the code name*/
+					var $Source_File 	= automation:Other_Routing_Engine_Finder() _ ":/var/home/full/" _ $Image_File;
 					var $Destination_File	= "/var/home/full/" _ $Image_File;
-					expr test:Routing_Engine_File_Transfer($Source_File,$Destination_File);
+					expr automation:Routing_Engine_File_Transfer($Source_File,$Destination_File);
 					<func:result select="$Destination_File">;
 				
 				
 			}
 			else
 			{
-				
-				expr test:Quit_Prompt_Function("\n You choose a file that is not present .");
-				var $Image_File_Path 	=   test:Image_File_Search_Backup();
+				/* If user entered a wrong file name then .restart the whole process of checking the files in other routing engine by calling
+					Image_File_Search_Backup function*/
+				expr automation:Quit_Prompt_Function("\n You choose a file that is not present .");
+				var $Image_File_Path 	=   automation:Image_File_Search_Backup();
 				<func:result select="$Image_File_Path">;
 			}
 			
 		}
 		else
 		{
+	/* If user enters that there is no required JUNOS code. The Quit_Prompt_Function error prompt function is called for the user to abort the script*/
 			
-			
-expr test:Quit_Prompt_Function("\n You don't have the required Image file in both of the routing engines ! \n Do you still want to continue with the maintenance ");
+expr automation:Quit_Prompt_Function("\n You don't have the required Image file in both of the routing engines ! \n Do you still want to continue with the maintenance ");
 				
 		}
 		
@@ -787,8 +924,8 @@ expr test:Quit_Prompt_Function("\n You don't have the required Image file in bot
 	{
 		
 		
-		
-expr test:Quit_Prompt_Function("\n You don't have the required Image file in both of the routing engines !\n Do you still want to continue with the maintenance ");
+	/* If other routing engine doesnt have any JUNOS code files. Then Quit_Prompt_Function error prompt function is called for the user to abort the script*/	
+expr automation:Quit_Prompt_Function("\n You don't have the required Image file in both of the routing engines !\n Do you still want to continue with the maintenance ");
 		
 		
 	}
@@ -796,63 +933,12 @@ expr test:Quit_Prompt_Function("\n You don't have the required Image file in bot
 }
 
 
-<func:function name="test:FTP_File_Transfer">
-{
-	param $Source_File;
-	param $Destination_File;
-	var $FTP_IP 		= jcs:get-input( "\n Please enter the IP address of the FTP server " );
-	var $FTP_Hostname	= jcs:get-input( "\n Please enter user name of the FTP server " );
-	var $Password		= jcs:get-secret( "\n Please enter the password ");
-	
-	var $FTP_Config_path	= test:FTP_Config_Path_Finder();
-	
-	var $Temp		="ftp://" _ $FTP_Hostname _ ":" _ $Password _ "@" _ $FTP_IP _ $FTP_Config_path _  $Destination_File;
 
-	var $file-copy-xml-rpc = <file-copy> {
-     			 	<source> $Source_File;
-      				<destination> $Temp;
-						
-    						}	
-	var $results-xml = jcs:invoke($file-copy-xml-rpc);
-	if ($results-xml//self::xnm:error)
-	{
-		expr jcs:output($results-xml);
-		expr jcs:output("\n File transer failed ! Please try again ");
-		expr test:FTP_File_Transfer($Source_File,$Destination_File);
-	}
-	else
-	{
-		expr jcs:output("\n File transfered successfully ! ");
-	}
-	
-}
+/*
+Other_Routing_Engine_Finder Function gives the name of other routing engine.
+*/
 
-
-<func:function name="test:FTP_Config_Path_Finder">
-{
-	var $FTP_Config_option	= jcs:get-input("\n Do you want to save file in /prod/img directory at FTP server (yes/no) ? ");
-	if($FTP_Config_option=="yes")
-	{
-		var $FTP_Config_path= "/prod/img/";
-		<func:result select="$FTP_Config_path">;
-	}
-	else
-	{
-		if($FTP_Config_option=="no")
-		{
-			var $FTP_Config_path=jcs:get-input("\n please give the path from root ");
-			<func:result select="$FTP_Config_path">;
-		}
-		else
-		{
-			var $FTP_Config_path	= test:FTP_Config_Path_Finder();
-			<func:result select="$FTP_Config_path">;
-		}
-	}
-}
-
-
-<func:function name="test:Other_Routing_Engine_Finder">
+<func:function name="automation:Other_Routing_Engine_Finder">
 {
 	if($junos-context/routing-engine-name=="re0")
 	{
@@ -869,14 +955,20 @@ expr test:Quit_Prompt_Function("\n You don't have the required Image file in bot
 		else
 		{
 			
-			expr test:Quit_Prompt_Function("\n Routing engine is not configured. Please quit and debug.");
+			expr automation:Quit_Prompt_Function("\n Routing engine is not configured. Please quit and debug.");
 			
 		}
 	}
 }
 
+/*
+Routing_Engine_File_Transfer transfers copies the from $Source_File to $Destination_File.
+The function gives the success message if file transfer is successful.
+If file transfer is failed then Quit_Prompt_Function is called.
 
-<func:function name="test:Routing_Engine_File_Transfer">
+*/
+
+<func:function name="automation:Routing_Engine_File_Transfer">
 {
 	param $Source_File;
 	param $Destination_File;
@@ -893,7 +985,7 @@ expr test:Quit_Prompt_Function("\n You don't have the required Image file in bot
 	{
 		expr jcs:output($results-xml);
 		
-		expr test:Quit_Prompt_Function("\n File transer failed between routing engines ! Please quit and check connections ");
+		expr automation:Quit_Prompt_Function("\n File transer failed between routing engines ! Please quit and check connections ");
 	}
 	else
 	{
@@ -904,12 +996,20 @@ expr test:Quit_Prompt_Function("\n You don't have the required Image file in bot
 }
 
 
+/*Continue_Prompt_Function will implement a prompt which gives three options to the user
+ 1) yes 	-----> 	to go to next step
+ 2) quit 	-----> 	to exit from the script
+ 3) show	-----> 	choosing show will call View_System_Running function by which the user can run the operational commands and check the operational status 
+			of the router
+ if the user enters anything other than these three words Continue_Prompt_Function is called again	
+*/
 
-<func:function name="test:Continue_Prompt_Function">
+<func:function name="automation:Continue_Prompt_Function">
 {
+	
 	param $Display;
 	expr jcs:output($Display);
-	expr jcs:output("\n Please Choose \"yes\" [to Continue],\"quit\" [to Exit],\"show\" [show command]");
+	expr jcs:output("\n Please Choose \"yes\" [to continue],\"quit\" [to Exit],\"show\" [show command]");
 	
 	var $var = jcs:get-input(" Enter: ");
 	if($var=="quit")     
@@ -920,8 +1020,8 @@ expr test:Quit_Prompt_Function("\n You don't have the required Image file in bot
 	{
 		if($var=="show")
 		{
-			expr test:View_System_Running();
-			expr test:Continue_Prompt_Function($Display);
+			expr automation:View_System_Running();
+			expr automation:Continue_Prompt_Function($Display);
 		}
 		else
 		{
@@ -929,7 +1029,7 @@ expr test:Quit_Prompt_Function("\n You don't have the required Image file in bot
 			{
 		
 				<xsl:message> "Wrong Option . Please retry\n";
-				expr test:Continue_Prompt_Function($Display);
+				expr automation:Continue_Prompt_Function($Display);
 				
 			
 			}
@@ -938,7 +1038,16 @@ expr test:Quit_Prompt_Function("\n You don't have the required Image file in bot
 	
 }
 
-<func:function name="test:File_Name_Creater">
+/*
+
+File_Name_Creater function creates a string File_name in the format "[Router name][month][day][year]"
+(File_name) ------->	The pre maintenance configuration of the router is saved with this name.
+(File_name).xml---->	 This xml file is used to store pre maintenance state of the router.This xml file contains the output of following commands
+
+
+*/
+
+<func:function name="automation:File_Name_Creater">
 {
 
 	var $regex 		= "([[:digit:]]*)-([[:digit:]]*)-([[:digit:]]*) ([0-9]*):([0-9]*):([0-9]*).*";
@@ -949,10 +1058,18 @@ expr test:Quit_Prompt_Function("\n You don't have the required Image file in bot
 	var $File_name		= $Actual_Router_Name _ "." _ $result[3] _ $result[4] _ substring($result[2],3,4);
 	<func:result select="$File_name">;
 }
-	
+
+/*
+Quit_Prompt_Function will implement a prompt which gives three options to the user
+ 1) continue 	-----> 	to go to next step
+ 2) quit 	-----> 	to exit from the script
+ 3) show	-----> 	choosing show will call View_System_Running function by which the user can run the operational commands and check the operational status 
+			of the router	
+ if the user enters anything other than these three words Quit_Prompt_Function is called again
+*/	
 
 
-<func:function name="test:Quit_Prompt_Function">
+<func:function name="automation:Quit_Prompt_Function">
 {
 	param $Display;
 	expr jcs:output($Display);
@@ -966,8 +1083,8 @@ expr test:Quit_Prompt_Function("\n You don't have the required Image file in bot
 	{
 		if($var=="show")
 		{
-			expr test:View_System_Running();
-			expr test:Quit_Prompt_Function($Display);
+			expr automation:View_System_Running();
+			expr automation:Quit_Prompt_Function($Display);
 		}
 		else
 		{
@@ -975,7 +1092,7 @@ expr test:Quit_Prompt_Function("\n You don't have the required Image file in bot
 			{
 		
 				<xsl:message> "Wrong Option . Please retry\n";
-				expr test:Quit_Prompt_Function($Display);
+				expr automation:Quit_Prompt_Function($Display);
 				
 			
 			}
@@ -988,7 +1105,7 @@ template Traffic_Removal_Function()
 {
 	expr jcs:output("\n\n Hello! Welcome to Traffic Removal MOP \n");
 	
-	expr test:Continue_Prompt_Function("\n\n Do you want to remove the traffic from router ?\n ");
+	expr automation:Continue_Prompt_Function("\n\n Do you want to remove the traffic from router ?\n ");
 
 /************************************* saving the configuration **************************************************************************/	
 	
@@ -1000,13 +1117,16 @@ template Traffic_Removal_Function()
 
 /********************************************** show aps *********************************************************************************/
 
+	/* Execute "show aps " command and check if it returns any output.If it returns an output having a child-node "aps-interface" the
+	    give an error prompt saying VOIP traffic is present.*/
+
 	var $show_aps		= <command> "show aps";
 	var $o_show_aps		= jcs:invoke($show_aps);
 
 	if( ($o_show_aps/aps-interface)&&($o_show_aps) && not(($o_show_aps//self::xnm:warning)||($o_show_aps//self::xnm:error)))
 	{
 		
-		expr test:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
+		expr automation:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
 	}
 	else
 	{
@@ -1023,7 +1143,8 @@ template Traffic_Removal_Function()
 	
 	
 	
-
+	/* Execute "show bgp summary" command and check if it returns any output.If peer-as "1661" is present
+	    give an error prompt saying VOIP traffic is present.*/
 
 /********************************************** show bgp summary| match 1661 *************************************************************/
 
@@ -1034,7 +1155,7 @@ template Traffic_Removal_Function()
 	{
 		
 			
-			expr test:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");			
+			expr automation:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");			
 		
 			
 	}
@@ -1048,13 +1169,16 @@ template Traffic_Removal_Function()
 
 /********************************************** show bfd session | match ^152 ************************************************************/
 
+	/* Execute "show bfd session" command and check if it returns any output.If session-neighbor "152" is present
+	    give an error prompt saying VOIP traffic is present.*/
+
 	var $show_bfd 		= <command> "show bfd session";
 	var $o_show_bfd		= jcs:invoke($show_bfd);
 	
 	if($o_show_bfd/bfd-session[starts-with(session-neighbor,152)])
 	{
 			
-			expr test:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
+			expr automation:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)	");
 		
 	}
 	else
@@ -1068,6 +1192,9 @@ template Traffic_Removal_Function()
 	expr jcs:output("\n Now running the command \" show vrrp \" ");
 
 /********************************************** show vrrp ********************************************************************************/
+	
+	/* Execute "show vrrp" command and check if it returns any output.If session-neighbor "152" is present
+	    give an error prompt saying VOIP traffic is present.*/
 
 	var $show_vrrp 		= <command> "show vrrp";
 	var $o_show_vrrp 	= jcs:invoke($show_vrrp);
@@ -1075,7 +1202,7 @@ template Traffic_Removal_Function()
 	if( ($o_show_vrrp) &&($o_show_vrrp/vrrp-interface) && not(($o_show_vrrp//self::xnm:warning)||($o_show_vrrp//self::xnm:error)) ) 
 	{
 		
-		expr test:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)");
+		expr automation:Quit_Prompt_Function("\n VOIP data present .Please contact the VNOC at v966-6700 (800-229-7427)");
 	}
 	else
 	{
@@ -1092,8 +1219,8 @@ template Traffic_Removal_Function()
 
 	var $connection = jcs:open();
 	
-	expr test:Continue_Prompt_Function("\n Do you want to Deactivate External BGP ?");
-/********************************************** Deactivating External BGP Neighbors ******************************************************/
+	expr automation:Continue_Prompt_Function("\n Do you want to Deactivate External BGP ?");
+/********************************************** Deactivate External BGP Neighbors except the peers which start with 61,62,64,65*******************************/
 
  	var $Bgp_Config=<get-configuration>;
 	var $O_Bgp_Config = jcs:invoke($Bgp_Config);
@@ -1118,19 +1245,20 @@ template Traffic_Removal_Function()
 		call jcs:load-configuration( $connection, $configuration = $bgp_group_de-activate_configuration);
 		
 	}
-/********************************************** Wait for krt Queue ******************************************************/
-	expr test:Show_KRT_Queue();
-	expr test:Continue_Prompt_Function("\n Do you want to deactivate routing-instances if configured ?");
+/********************************************** Wait for until krt Queue is empty for two successive minutes in the  total of 5 minutes****************************/
+	expr automation:Show_KRT_Queue();
+	expr automation:Continue_Prompt_Function("\n Do you want to deactivate routing-instances if configured ?");
 
-/********************************************** deactivate routing-instances *********************************************************************/
+/********************************************** deactivate routing-instances if configured*********************************************************************/
 
 	var $Routing-Instances		= <get-configuration>;
 	var $O_Routing-Instances	= jcs:invoke($Routing-Instances);
+	/* Check if routing instances are configured */
 	if($O_Routing-Instances/routing-instances)
 	{
 		expr jcs:output("\n Routing-instances are configured .");
-		
-		expr test:Continue_Prompt_Function("\n Do you want to deactivate routing-instances ?");
+		/*Deactivate configured routing instances*/
+		expr automation:Continue_Prompt_Function("\n Do you want to deactivate routing-instances ?");
 		var $routing_instance_deactivate =	{
 					<configuration>{
             					<routing-instances inactive="inactive">;
@@ -1147,7 +1275,7 @@ template Traffic_Removal_Function()
 	
 	
 	
-	expr test:Continue_Prompt_Function("\n Do you want set protocols isis overload ?");
+	expr automation:Continue_Prompt_Function("\n Do you want set protocols isis overload ?");
 
 /********************************************** set protocols isis overload **************************************************************/
 	var $isis_configuration={
@@ -1177,7 +1305,7 @@ template Traffic_Removal_Function()
 	call jcs:load-configuration( $connection, $configuration =$isis_configuration);
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want deactivate bgp protocols ?");
+	expr automation:Continue_Prompt_Function("\n Do you want deactivate bgp protocols ?");
 	
 /********************************************** deactivate bgp protocols *****************************************************************/
 
@@ -1195,13 +1323,13 @@ template Traffic_Removal_Function()
 
 /********************************************** Show KRT Waiting *****************************************************************/
 
-	expr test:Show_KRT_Queue();
+	expr automation:Show_KRT_Queue();
 
 
 
 	
 	
-	expr test:Continue_Prompt_Function("\n Do you want deactivate protocols ?");
+	expr automation:Continue_Prompt_Function("\n Do you want deactivate protocols ?");
 
 /********************************************** deactivate protocols *********************************************************************/
 
@@ -1219,16 +1347,17 @@ template Traffic_Removal_Function()
 	
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to deactivate routing-options if configured ?");
+	expr automation:Continue_Prompt_Function("\n Do you want to deactivate routing-options if configured ?");
 
 /********************************************** deactivate routing-options *********************************************************************/
 
 	var $Config-Routing-options	= <get-configuration>;
 	var $O-Config-Routing-options	= jcs:invoke($Config-Routing-options);
-	
+	/* Check if routing options are configured*/
 	if($O-Config-Routing-options/routing-options)
 	{
-		expr test:Continue_Prompt_Function("\n Routing options are active .Do you want to deactivate routing-options ?");
+		/*Deactivate the configured routing options*/
+		expr automation:Continue_Prompt_Function("\n Routing options are active .Do you want to deactivate routing-options ?");
 		var $routing_options_deactivate =	{
 						<configuration>{
             						<routing-options inactive="inactive">;
@@ -1244,7 +1373,7 @@ template Traffic_Removal_Function()
 
 	
 	
-	expr test:Continue_Prompt_Function("\n Do you want to deactivate chassis redundancy ?");
+	expr automation:Continue_Prompt_Function("\n Do you want to deactivate chassis redundancy ?");
 
 /********************************************** deactivate chassis redundancy *********************************************************************/
 
@@ -1265,39 +1394,49 @@ template Traffic_Removal_Function()
 }
 
 
-<func:function name="test:Show_KRT_Queue">
+<func:function name="automation:Show_KRT_Queue">
 {
 
-	
-	var $Return = test:Show_KRT_Queue_Checker(4,0);
+	/* Show_KRT_Queue initialises the KRT_Queue_checker function with the hard time out of 5 minutes.*/
+	var $Return = automation:Show_KRT_Queue_Checker(4,0);
 	
 
 }
-
-<func:function name="test:Show_KRT_Queue_Checker">
+	/*
+		Show_KRT_Queue_Checker first invokes jcs:sleep(60).The script waits for 60 sec .After that checks whether $Count is zero.
+		If $Count is zero it means hard time out occured ,a error prompt is given to user that Queue didnt converge in 
+		5 minutes.If $Count is not zero then wait the script checks whether all the nodes of "show krt queue" output are 
+		zero.If any one of them is not zero then Show_KRT_Queue_Checker function is called again with reduced $Count value and $Perfect as zero. 
+		If all nodes of "show krt queue" output are zero it is checked whether $Perfect is 1.If it is "one" it means that 
+		krt queue converged in the before executing Show_KRT_Queue_Checker function.So code returns to Traffic_Removal_Function template.
+		Else if  $Perfect is not zero then Show_KRT_Queue_Checker function is called again with reduced $Count value and $Perfect as "one". 
+		
+	*/
+<func:function name="automation:Show_KRT_Queue_Checker">
 {
 	param $Count;
 	param $Perfect;
 	var $show_krt_queue	= <command> "show krt queue";
 	var $o_show_krt_queue	= jcs:invoke($show_krt_queue);
 	expr jcs:output(" Waiting for 60 secs");
-	expr jcs:sleep( 60 );
+	expr jcs:sleep( 60 );		/* Wait for 60 seconds*/
 	
-	
+	/* Check if hard time-out is expired */
 	if($Count==0)
 	{
 		
-		expr test:Quit_Prompt_Function("\n Queue didnt get converge in 10 minutes .Something is wrong.!");
+		expr automation:Quit_Prompt_Function("\n Queue didnt get converge in 10 minutes .Something is wrong.!");
 		
 	}
+	
 	for-each($o_show_krt_queue/krt-queue)
 	{
-		
+		/*Check if KRT Queue output is empty for each node*/
 		if(./krtq-queue-length!=0)
 		{ 	
 			
-			
-			var $Return = test:Show_KRT_Queue_Checker($Count - 1,0);
+			/*if krtq-queue-length not equal to zero then call Show_KRT_Queue_Checker with reduced $Count and $Perfect as "0"*/
+			var $Return = automation:Show_KRT_Queue_Checker($Count - 1,0);
 			<func:result select="$Return">;	
 			
 			
@@ -1305,6 +1444,7 @@ template Traffic_Removal_Function()
 		}
 	}
 	expr jcs:output(" KRT Queue is Empty");
+	/* If $Perfect is "1" then return to previous function called. ultimately return to template Traffic_Removal_Function */
 	if($Perfect==1)
 	{
 			
@@ -1315,7 +1455,8 @@ template Traffic_Removal_Function()
 	}
 	else
 	{
-			var $Return = test:Show_KRT_Queue_Checker($Count - 1,1);
+			/*if $Perfect not equal to "1" then call Show_KRT_Queue_Checker function with reduced $Count and $Perfect as "1"*/
+			var $Return = automation:Show_KRT_Queue_Checker($Count - 1,1);
 			
 			<func:result select="$Return">;
 	}

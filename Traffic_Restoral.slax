@@ -8,11 +8,26 @@ ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
 ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
 ns adv = "http://xml.juniper.net/adventure";
 ns func extension = "http://exslt.org/functions";
-ns test = "http://xml.juniper.net/test";
+ns automation = "http://xml.juniper.net/automation";
 ns exsl extension = "http://exslt.org/common";
 
 import "../import/junos.xsl";
 
+/*
+ * Author        : Vijay Kumar Badugu
+ * Version       : 1.0
+ * Last Modified : August 6, 2015
+ * Description   : The purpose of this op script is to restore the router configuration to that of pre maintenance configuration.
+ *		   
+ *
+ *==========================================================================================================
+ * To set this script up on your JUNOS device copy this script to the following folder:
+ * /var/run/scripts/op
+ *			
+ * Then configure JUNOS with the following :
+ * set system scripts op file Traffic_Restoral.slax
+ *
+ */
 
 
 match / {
@@ -24,18 +39,19 @@ match / {
 	var $O_Routing_Engine_Checker	= jcs:invoke($Routing_Engine_Checker);
 	
 	
-	
-	expr test:software_version();
+	/* Check whether both routing engines have same JUNOS code*/
+	expr automation:software_version();
 	
 	
 	
 /*********************************************************routing engine switch*********************************************************/
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to check whether re0 is the master routing engine switch ? " );
+	expr automation:Continue_Prompt_Function("\n Do you want to check whether re0 is the master routing engine switch ? " );
 
 	
-	
+	/* Check whether "re0" is configured as master. If "re0" is not configured as a master do a routing engine switch by running
+	   following command "request chassis routing-engine master switch"*/
 	if($O_Routing_Engine_Checker/route-engine[(slot=="0")&&(mastership-state=="master")])
 	{
 		expr jcs:output("\n Re0 is Configured as Master.");	
@@ -44,12 +60,14 @@ match / {
 	{
 		expr jcs:output("\n Re0 is not configured as Master! ");
 		
-		expr test:Continue_Prompt_Function(" Do you want to run the command \" request chassis routing-engine master switch \" ?");
+		expr automation:Continue_Prompt_Function(" Do you want to run the command \" request chassis routing-engine master switch \" ?");
 		
 		var $Switch 	= <command> "request chassis routing-engine master switch";
 		var $O_Switch 	= jcs:invoke($Switch);
 		var $O_Recheck_Routing_Engine_Checker	= jcs:invoke($Routing_Engine_Checker);
 		
+		/* After runnign the command "request chassis routing-engine master switch" even still if re0 is not 
+	 	   configured as master then give an error prompt saying "re0" is still not configured as master*/
 		if($O_Recheck_Routing_Engine_Checker/route-engine[(slot=="0")&&(mastership-state=="master")])
 		{
 			expr jcs:output("\n Re0 is Configured as Master ");	
@@ -57,7 +75,7 @@ match / {
 		else
 		{
 			
-			expr test:Quit_Prompt_Function("\n Re0 is not configured as Master! ");
+			expr automation:Quit_Prompt_Function("\n Re0 is not configured as Master! ");
 			
 		}
 		
@@ -68,33 +86,37 @@ match / {
 
 
 /********************************************** search for xml restoral file ***************************************************************/
-	var $File_name		= "/var/home/full/" _ test:Check_if_File_Exits();
+
+	/* $File_name is the file name of the xml file that contains the pre maintenace state of the router*/
+	var $File_name		= "/var/home/full/" _ automation:Check_if_File_Exits();
 
 	
 	
 	var $Restoral_xml_file		= $File_name ;
-	var $O_Bgp_Config		= document($Restoral_xml_file);
+	var $O_Bgp_Config		= document($Restoral_xml_file);/* Open the pre maintenace state xml file and assign the node set to $O_Bgp_Config variable*/
 /********************************************** search for xml restoral file ***************************************************************/
 	expr jcs:output("\n Now showing the Pre Maintenance and Pre Maintenance hardware status  ");
 
-	expr test:Hardware-Status($Restoral_xml_file);
+	expr automation:Hardware-Status($Restoral_xml_file);	/* Check the hardware before adding the traffic*/
 
-	expr test:Continue_Prompt_Function("\n Do you want to proceed further to restore the traffic ?");
-
-	
+	expr automation:Continue_Prompt_Function("\n Do you want to proceed further to restore the traffic ?");
 
 	
+
+	
 	
 
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to restore routing-options to pre maintenace state ?");
+	expr automation:Continue_Prompt_Function("\n Do you want to restore routing-options to pre maintenace state ?");
 
-/********************************************** activate routing-options *********************************************************************/
+/********************************************** activate routing-options if it has been deactivated during by Upgrade.slax script********************************/
 	
+	/* Check if routing options are configured by checking pre maintanence state xml file  */
 	if($O_Bgp_Config/Restoral/Restoral-Conf/configuration/routing-options)
 	{
-		expr test:Continue_Prompt_Function(" Routing options are active pre maintenance .Do you want to activate routing options ");
+		/* activate if routing options are active pre maintenance*/
+		expr automation:Continue_Prompt_Function(" Routing options are active pre maintenance .Do you want to activate routing options ");
 		var $routing_options_activate =	{
 					<configuration>{
             					<routing-options active="active">;
@@ -104,7 +126,8 @@ match / {
 	}
 	else
 	{
-		expr jcs:output(" Routing options state are not active pre maintenance.So no changes to be made to routing options ");
+		/* Do nothing if routing options are not configured  pre maintenance*/
+		expr jcs:output(" Routing options state are not configured pre maintenance.So no changes to be made to routing options ");
 	}
 
 
@@ -112,7 +135,7 @@ match / {
 	
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to activate chassis redundancy ?");
+	expr automation:Continue_Prompt_Function("\n Do you want to activate chassis redundancy ?");
 
 /********************************************** activate chassis redundancy ***********************************************************************/
 
@@ -126,7 +149,7 @@ match / {
 	call jcs:load-configuration( $connection, $configuration =$chassis_redundancy_activate);
 	
 	
-	expr test:Continue_Prompt_Function("\n Do you want to activate protocols ?");
+	expr automation:Continue_Prompt_Function("\n Do you want to activate protocols ?");
 
 /********************************************** activate protocols ***********************************************************************/
 	
@@ -139,14 +162,14 @@ match / {
 	call jcs:load-configuration( $connection, $configuration =$protocols_activate_configuration);
 	
 /********************************************** Wait for krt Queue ******************************************************/
-	expr test:Show_KRT_Queue();
+	expr automation:Show_KRT_Queue();
 /********************************************** Wait for krt Queue ******************************************************/
 	
 	
-	expr test:Stats-Protocols($Restoral_xml_file);	
-	expr test:Continue_Prompt_Function("\n Do you want to proceed further to restore the traffic ?");
+	expr automation:Stats-Protocols($Restoral_xml_file);	
+	expr automation:Continue_Prompt_Function("\n Do you want to proceed further to restore the traffic ?");
 	
-	expr test:Continue_Prompt_Function("\n Do you want to activate bgp ?");
+	expr automation:Continue_Prompt_Function("\n Do you want to activate bgp ?");
 
 /********************************************** activate bgp *****************************************************************************/
 
@@ -162,19 +185,20 @@ match / {
 		
 	call jcs:load-configuration( $connection, $configuration =$bgp_activate_configuration);
 /********************************************** Wait for krt Queue ******************************************************/	
-	expr test:Show_KRT_Queue();
+	expr automation:Show_KRT_Queue();
 /********************************************** Wait for krt Queue ******************************************************/
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to  restore Pre Maintenance configuration of  ISIS ?");
+	expr automation:Continue_Prompt_Function("\n Do you want to restore ISIS overlaod to  pre maintenance state?");
 
-/********************************************** delete protocols isis overload ***********************************************************/
- 
+/********************************************** restore  pre maintenance state for isis overload ***********************************************************/
+ 	
+	/* Check if timeout is configured pre maintenance.If time out is present .configure isis overload timeout with value 600*/
 	if($O_Bgp_Config/Restoral/Restoral-Conf/configuration/protocols/isis/timeout)
 	{	
 		expr jcs:output("\n ISIS is not in overload state Pre Maintenance ");
 		
-		expr test:Continue_Prompt_Function(" Do you want to  delete protocols isis overload ?");
+		expr automation:Continue_Prompt_Function(" Do you want to  delete protocols isis overload ?");
 		var $isis_delete_configuration={
 			<configuration> {
 				<protocols> {
@@ -187,7 +211,7 @@ match / {
 		call jcs:load-configuration( $connection, $configuration =$isis_delete_configuration);
 
 		
-		expr test:Continue_Prompt_Function("\n Do you want to  set protocols isis overload timeout 600 ?");
+		expr automation:Continue_Prompt_Function("\n Do you want to  set protocols isis overload timeout 600 ?");
 
 /********************************************** set protocols isis overload timeout 600  *************************************************/
 
@@ -207,9 +231,11 @@ match / {
 	}
 	else
 	{
+		/* check if isis is overload in pre maintenance*/
 		if($O_Bgp_Config/Restoral/Restoral-Conf/configuration/protocols/isis/overload)
-		{		
-			expr test:Continue_Prompt_Function("\n ISIS is in overload state Pre Maintenance. Do you want to set isis to Pre Maintenance state ? ");
+		{
+			/*restore isis overload to  pre maintenance state by setting router in overload*/		
+		expr automation:Continue_Prompt_Function("\n ISIS is in overload state Pre Maintenance. Do you want to set isis overload to Pre Maintenance state ? ");
 			var $isis_configuration={
 					<configuration> {
 						<protocols> {
@@ -223,9 +249,10 @@ match / {
 		}
 		else
 		{
+			/* if isis overload is not configured deleted overload in isis*/
 			expr jcs:output("\n ISIS is not in overload state Pre Maintenance ");
 			
-			expr test:Continue_Prompt_Function("\n Do you want to  delete protocols isis overload ?");	
+			expr automation:Continue_Prompt_Function("\n Do you want to  delete protocols isis overload ?");	
 			var $isis_delete_configuration={
 				<configuration> {
 					<protocols> {
@@ -239,15 +266,15 @@ match / {
 		}
 	}
 
-	expr test:Continue_Prompt_Function("\n Do you want to restore Pre Maintenance state for routing-instances ?");
+	expr automation:Continue_Prompt_Function("\n Do you want to restore Pre Maintenance state for routing-instances ?");
 	
-/********************************************** activate routing-instances ****************************************************************/
+/************************************** activate routing-instances if they are active  pre maintenance****************************************************************/
 	
-	
+	/* Check if routing-instances are configured  pre maintenance*/
 	if($O_Bgp_Config/Restoral/Restoral-Conf/configuration/routing-instances)
 	{
-		
-		expr test:Continue_Prompt_Function("\n Routing-instances is activated state Pre Maintenance.\n\n Do you want to activate routing-instances ?");
+		/* If routing-instances are configured  pre maintenance.activate them*/
+		expr automation:Continue_Prompt_Function("\n Routing-instances is activated state Pre Maintenance.\n\n Do you want to activate routing-instances ?");
 		var $routing_instance_activate =	{
 					<configuration>{
             					<routing-instances active="active">;
@@ -258,26 +285,27 @@ match / {
 	}
 	else
 	{
-		expr jcs:output("\n Routing-instances is not activated Pre Maintenance. Pre Maintenance state is restored");
+		expr jcs:output("\n Routing-instances is not activated Pre Maintenance.");
 	}
 
 	
-	expr test:Continue_Prompt_Function("\n Do you want to activate External BGP ? ");
+	expr automation:Continue_Prompt_Function("\n Do you want to activate External BGP ? ");
 
-/********************************************** activate group <GROUP_NAME>  *************************************************/
+/********************************************** activate Externel BGP peers that were deactivated by Upgrade.slax script **************************************/
 
 	var $Restore_Bgp_Config=<get-configuration>;
 	var $O_Restore_Bgp_Config 	= jcs:invoke($Restore_Bgp_Config);
 	
-
+/* search external bgp peers in present router configuration whose peer doesn't start with "64","65","61","62"*/
 for-each($O_Restore_Bgp_Config/protocols/bgp/group[(type=="external")&&(not(starts-with(peer-as,"64")||starts-with(peer-as,"65")||starts-with(peer-as,"61")||starts-with(peer-as,"62")))])
 	{
 		
 		var $Temp_bgp_grp = name;
 			
+		/* Check if this bgp peer is active pre maintenance .Activate the bgp peer if it was active pre maintenance*/
 		if($O_Bgp_Config/Restoral/Restoral-Conf/configuration/protocols/bgp/group[(not(@inactive))&&(name==$Temp_bgp_grp)])
 		{	
-			
+				/*Activating the bgp peer that was active pre maintenance*/
 				expr jcs:output("\n Now activating bgp group " _ name _ " with peer-as " _ peer-as);
 					var $bgp_group_activate_configuration={
 						<configuration> {
@@ -302,8 +330,8 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[(type=="external")&&(not(star
 	}
 
 
-
-	expr test:Diff-Statistics($Restoral_xml_file);
+	/* Display the difference of pre maintanence and post maintanence state of the router*/
+	expr automation:Diff-Statistics($Restoral_xml_file);
 	
 	var $close-results = jcs:close($connection);
 
@@ -314,51 +342,80 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[(type=="external")&&(not(star
 
 }
 
-<func:function name="test:Stats-Protocols">
+/*
+Stats-Protocols functions gives the difference of following command outputs pre and post maintainence
+	show isis Adjacency
+	show ldp neighbor
+	show ldp session
+	how mpls interfaces
+
+	
+	
+*/
+
+
+<func:function name="automation:Stats-Protocols">
 {
 
 	param $Restoral_xml_file;
 	var $Pre_Maintainence=document($Restoral_xml_file);
-	var $Post_Maintainence=test:Tree-construct();
+	var $Post_Maintainence=automation:Tree-construct();
 	expr jcs:output("\n 		show isis Adjacency");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_Isis_Adjacency($Pre_Maintainence,$Post_Maintainence);
+	/*Compare pre maintainence node set ,post maintainence node set of "show isis Adjacency" output*/
+	expr automation:Diff_Isis_Adjacency($Pre_Maintainence,$Post_Maintainence);
 	
 	expr jcs:output("\n 		show ldp neighbor");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_LDP_Neighbor($Pre_Maintainence,$Post_Maintainence);
+	/*Compare pre maintainence node set ,post maintainence node set of "show ldp neighbor" output*/
+	expr automation:Diff_LDP_Neighbor($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show ldp session");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_LDP_Sessions($Pre_Maintainence,$Post_Maintainence);
+	/*Compare pre maintainence node set ,post maintainence node set of "show ldp session" output*/
+	expr automation:Diff_LDP_Sessions($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show mpls interfaces");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_mpls_interfaces($Pre_Maintainence,$Post_Maintainence);
+	/*Compare pre maintainence node set ,post maintainence node set of "mpls interfaces" output*/
+	expr automation:Diff_mpls_interfaces($Pre_Maintainence,$Post_Maintainence);
 }
 
+/*
+Hardware-Status functions gives the difference of following command outputs pre and post maintainence
+	show chassis alarms
+	show chassis fpc pic-status
+	show chassis environment
 
+and checks whether master routing engine and back up routing engines are in "OK" status
+	
+	
+*/
 
-<func:function name="test:Hardware-Status">
+<func:function name="automation:Hardware-Status">
 {
 
 	param $Restoral_xml_file;
-	var $Pre_Maintainence=document($Restoral_xml_file);
-	var $Post_Maintainence=test:Tree-construct();
+	var $Pre_Maintainence=document($Restoral_xml_file);		/* Get the pre maintainence node set*/
+	var $Post_Maintainence=automation:Tree-construct();		/* Get the post maintainence node set*/
 	expr jcs:output("\n 		show chassis alarms");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_chassis_alarms($Pre_Maintainence,$Post_Maintainence);
+	/*Compare pre maintainence node set ,post maintainence node set of "show chassis alarms" output*/
+	expr automation:Diff_chassis_alarms($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show chassis fpc pic-status");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_chassis_fpc($Pre_Maintainence,$Post_Maintainence);
+	/*Compare pre maintainence node set ,post maintainence node set of "show chassis fpc pic-status" output*/
+	expr automation:Diff_chassis_fpc($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show chassis environment");
 	expr jcs:output("*****************************************************************");
 
-
-	expr test:Diff_Chassis_Environment($Pre_Maintainence,$Post_Maintainence);
+	/*Compare pre maintainence node set ,post maintainence node set of "show chassis environment" output*/
+	expr automation:Diff_Chassis_Environment($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show chassis routing-engine");
 	expr jcs:output("*****************************************************************");
 	
 	var $Routing_Engine_Checker	= <command> " show chassis routing-engine ";
 	var $O_Routing_Engine_Checker	= jcs:invoke($Routing_Engine_Checker);
+	
+	/* Check if master routing engine status is "OK"*/
 	
 	if($O_Routing_Engine_Checker/route-engine[(mastership-state=="master")&&(status=="OK")])
 	{
@@ -366,73 +423,109 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[(type=="external")&&(not(star
 	}
 	else
 	{
-		expr test:Quit_Prompt_Function("\n Problem in Routing Engine.Please debug before continuing");
+		expr automation:Quit_Prompt_Function("\n Problem in Routing Engine.Please debug before continuing");
 		
 	}
+	/* Check if backup routing engine status is "OK"*/
 	if($O_Routing_Engine_Checker/route-engine[(mastership-state=="backup")&&(status=="OK")])
 	{
 		expr jcs:output("\n Backup routing engine is Online");
 	}
 	else
 	{
-		expr test:Quit_Prompt_Function("\n Problem in Routing Engine.Please debug before continuing");
+		expr automation:Quit_Prompt_Function("\n Problem in Routing Engine.Please debug before continuing");
 	}
 	
 }
+/*
+Diff-Statistics function gives the difference of following command outputs pre and post maintainence
+			a)		show chassis fpc pic-status
+			b)		show isis Adjacency
+			c)		show bgp summary
+			d)		show ldp neighbor
+			e)		show ldp session
+			f)		show bfd session
+			g)		show interface description
+			i)		show mpls interfaces
+			j)		show rsvp interfaces
+			k)		show chassis alarms
+			l)		show mpls terse
+			m)		show route summary
+			n)		show chassis environment
 
-<func:function name="test:Diff-Statistics">
+	
+	
+*/
+
+
+<func:function name="automation:Diff-Statistics">
 {
 	param $Restoral_xml_file;
 	var $Pre_Maintainence=document($Restoral_xml_file);
-	var $Post_Maintainence=test:Tree-construct();
+	var $Post_Maintainence=automation:Tree-construct();
 	expr jcs:output("\n		Statistics");
 	expr jcs:output("*****************************************************************");
 	expr jcs:output("\n 		show chassis fpc pic-status");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_chassis_fpc($Pre_Maintainence,$Post_Maintainence);
+	expr automation:Diff_chassis_fpc($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show isis Adjacency");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_Isis_Adjacency($Pre_Maintainence,$Post_Maintainence);
+	expr automation:Diff_Isis_Adjacency($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show bgp summary");
-	expr test:Diff_BGP_Summary($Pre_Maintainence,$Post_Maintainence);
+	expr automation:Diff_BGP_Summary($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show ldp neighbor");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_LDP_Neighbor($Pre_Maintainence,$Post_Maintainence);
+	expr automation:Diff_LDP_Neighbor($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show ldp session");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_LDP_Sessions($Pre_Maintainence,$Post_Maintainence);
+	expr automation:Diff_LDP_Sessions($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show bfd session");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_BFD_Session($Pre_Maintainence,$Post_Maintainence);
+	expr automation:Diff_BFD_Session($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show interface description");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_int_desc($Pre_Maintainence,$Post_Maintainence);
+	expr automation:Diff_int_desc($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show mpls interfaces");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_mpls_interfaces($Pre_Maintainence,$Post_Maintainence);
+	expr automation:Diff_mpls_interfaces($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show rsvp interfaces");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_rsvp_interfaces($Pre_Maintainence,$Post_Maintainence);
+	expr automation:Diff_rsvp_interfaces($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show chassis alarms");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_chassis_alarms($Pre_Maintainence,$Post_Maintainence);
+	expr automation:Diff_chassis_alarms($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show mpls terse");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_mpls_terse($Pre_Maintainence,$Post_Maintainence);
+	expr automation:Diff_mpls_terse($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show route summary");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_route_summary($Pre_Maintainence,$Post_Maintainence);
+	expr automation:Diff_route_summary($Pre_Maintainence,$Post_Maintainence);
 	expr jcs:output("\n 		show chassis environment");
 	expr jcs:output("*****************************************************************");
-	expr test:Diff_Chassis_Environment($Pre_Maintainence,$Post_Maintainence);
+	expr automation:Diff_Chassis_Environment($Pre_Maintainence,$Post_Maintainence);
 	
 }
 
 
+/* Tree-construct constructs a node set which contains output of following commands and configuration of the router
+			a)		show chassis fpc pic-status
+			b)		show isis Adjacency
+			c)		show bgp summary
+			d)		show ldp neighbor
+			e)		show ldp session
+			f)		show bfd session
+			g)		show interface description
+			i)		show mpls interfaces
+			j)		show rsvp interfaces
+			k)		show chassis alarms
+			l)		show mpls terse
+			m)		show route summary
+			n)		show chassis environment
+*/
 
-
-<func:function name="test:Tree-construct">
+<func:function name="automation:Tree-construct">
 {
+	/* Get the outputs of the above commands and configuration*/
 	var $xml_config			= <get-configuration format="xml">;
 	var $o_xml_config		= jcs:invoke($xml_config);
 	var $fpc-pic-status		= <command> "show chassis fpc pic-status";
@@ -478,10 +571,11 @@ for-each($O_Restore_Bgp_Config/protocols/bgp/group[(type=="external")&&(not(star
 var $content := {
 			<Restoral> {
 				<Restoral-Conf>{
-					copy-of $o_xml_config;
+					copy-of $o_xml_config; 		/*router configuration is added to node-set here*/
 					
 					}
-				<Restoral-Chassis-Environment>{		for-each($o_show_chassis_environment/environment-item)
+				<Restoral-Chassis-Environment>{		/*output of  "show chassis environment" is added to node-set here*/
+									for-each($o_show_chassis_environment/environment-item)
 									{
 										 <environment-item>
 											{
@@ -494,7 +588,7 @@ var $content := {
 								}
 				<Restoral-route-summary>{
 
-
+									/* output of  "show route summary" is added to node-set here*/
 							for-each($o_show_route/route-table)
 							{
 								<route-table>
@@ -508,6 +602,7 @@ var $content := {
 						
 							}
 				<Restoral-mpls-terse>{
+									/*output of  "show mps lsp terse" is added to node-set here*/
 							for-each($o_show_mpls_lsp_terse/rsvp-session-data)
 							{
 								<rsvp-session-data>
@@ -525,7 +620,7 @@ var $content := {
 
 
 						    }
-				<Restoral-Chassis-alarms>{
+				<Restoral-Chassis-alarms>{		/*  output of  "show chassis alarms" is added to node-set here*/
 								for-each($o_show_chassis_alarms/alarm-summary)
 								{
 									 <alarm-summary>{
@@ -552,7 +647,7 @@ var $content := {
 							}
 							
 				
-				<Restoral-rsvp-interface>	{
+				<Restoral-rsvp-interface>	{	/*  output of  "show rsvp interfaces" is added to node-set here*/
 									for-each($o_show_rsvp_int/rsvp-interface)
 									{
 										<rsvp-interface>
@@ -564,7 +659,7 @@ var $content := {
 									}
 								}
 
-				<Restoral-mpls-interface>	{
+				<Restoral-mpls-interface>	{	/*  output of "show mpls interfaces" is added to node-set here*/
 									for-each($o_show_mpls_int/mpls-interface)
 									{
 										<mpls-interface>{
@@ -574,6 +669,7 @@ var $content := {
 									}
 								}
 				<Restoral-int-desc>	{
+									/*  output of "show interface descriptions" is added to node-set here*/
 								for-each($o_show_interface_des/physical-interface)
 								{
 									<physical-interface>{
@@ -585,7 +681,7 @@ var $content := {
 									
 							}
 
-				<Restoral-bfd>	{
+				<Restoral-bfd>	{			/*  output of "show bfd session" is added to node-set here*/
 							for-each($o_show_bfd/bfd-session)
 							{
 							<bfd-session>{
@@ -600,7 +696,7 @@ var $content := {
 							}
 						}
 				
-				<Restoral-ldp-session>	{
+				<Restoral-ldp-session>	{		/*  output of "show ldp session" is added to node-set here*/
 								for-each($o_ldp_session/ldp-session)
 								{
 									<ldp-session>{
@@ -615,7 +711,7 @@ var $content := {
 									
 							}
 
-				<Restoral-ldp-neighbor>	{
+				<Restoral-ldp-neighbor>	{		/*  output of "show ldp neighbor" is added to node-set here*/
 								for-each($o_ldp_neighbor/ldp-neighbor)
 								{
 									 <ldp-neighbor>{
@@ -628,7 +724,7 @@ var $content := {
 									
 							}
 
-				<Restoral-Bgp>	{
+				<Restoral-Bgp>	{			/*  output of "show bgp summary" is added to node-set here*/
 								for-each($o_get-bgp/bgp-peer)
 								{
 									<bgp-peer>{
@@ -641,7 +737,7 @@ var $content := {
 									
 								
 						}
-				<Restoral-Isis>	{
+				<Restoral-Isis>	{			/*  output of "show isis adjacency" is added to node-set here*/
 							for-each($o-get-isis-adjacency/isis-adjacency)
 							{
 							<isis-adjacency>{
@@ -656,7 +752,7 @@ var $content := {
 				
 				
 
-				<Restoral-fpc-pic>	{
+				<Restoral-fpc-pic>	{		/*  output of "show fpc pic status" is added to node-set here*/
 								 	for-each($o_fpc-pic-status/fpc)
 									{
 										<fpc>{
@@ -683,22 +779,28 @@ var $content := {
 			
 }
 
+/*
+Diff_Chassis_Environment function gives the differences between pre maintainence and post maintainence output of "show chassis environment"
+*/
 
-<func:function name="test:Diff_Chassis_Environment">
+<func:function name="automation:Diff_Chassis_Environment">
 {
 	param $Pre_Maintainence;
 	param $Post_Maintainence;
 	
+	/* Go through each node of environment-item  of $Pre_Maintainence/Restoral/Restoral-Chassis-Environment */
 	for-each($Pre_Maintainence/Restoral/Restoral-Chassis-Environment/environment-item)
 	{
 		var $pre-name	=	name;
 		var $pre-class	=	class;
 		var $pre-status	=	status;
+		/* Check if the present environment-item element is present in post maintainence*/
 		if($Post_Maintainence/Restoral/Restoral-Chassis-Environment/environment-item[$pre-name==name])	
 		{
 			var $post-name		=	$Post_Maintainence/Restoral/Restoral-Chassis-Environment/environment-item[$pre-name==name]/name;
 			var $post-class		=	$Post_Maintainence/Restoral/Restoral-Chassis-Environment/environment-item[$pre-name==name]/class;
 			var $post-status	=	$Post_Maintainence/Restoral/Restoral-Chassis-Environment/environment-item[$pre-name==name]/status;
+			/* Check whether post maintainence status and pre maintainence status are equal*/
 			if($post-status!=$pre-status)
 			{
 				expr jcs:output(" The status of " _ $pre-name _ " changed from " _ $pre-status _ " to " _ $post-status);
@@ -707,15 +809,18 @@ var $content := {
 		}
 		else
 		{
+			/* display the environment-item that is missing post Maintainence */
 			expr jcs:output("\n " _ $pre-name _ " with status " _ $pre-status _ " of class " _ $pre-class _ " is  missing post Maintainence"); 
 		}	
 	}
 	
+	/*Go through each node of environment-item of $Post_Maintainence/Restoral/Restoral-Chassis-Environment*/
 	for-each($Post_Maintainence/Restoral/Restoral-Chassis-Environment/environment-item)
 	{
 		var $post-name		=	name;
 		var $post-class		=	class;
 		var $post-status	=	status;	
+		/* check if the present environment-item element is present in  pre Maintainence node set*/
 		if(not($Pre_Maintainence/Restoral/Restoral-Chassis-Environment/environment-item[$post-name==name]))
 		{
 			expr jcs:output("\n " _ $post-name _ " with status " _ $post-status _ " of class " _ $post-class _ " is newly added post Maintainence"); 
@@ -723,25 +828,35 @@ var $content := {
 	}
 }
 
-<func:function name="test:Diff_rsvp_interfaces">
+
+/*
+Diff_rsvp_interfaces function gives the differences between pre maintainence and post maintainence output of "show rsvp interfaces"
+*/
+
+
+<func:function name="automation:Diff_rsvp_interfaces">
 {
 	param $Pre_Maintainence;
 	param $Post_Maintainence;
 	expr jcs:output("\n Pre-Maintenance rsvp interfaces  : " _ count($Pre_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface));
 	expr jcs:output(" Post-Maintenance rsvp interfaces : " _ count($Post_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface));
 	
+	
+	/*Go through each node of rsvp-interface element in  $Pre_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface */	
 	for-each($Pre_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface)
 	{
 	
 		var $pre-interface-name	= interface-name;
 		var $pre-index		= index;
 		var $pre-rsvp-status	= rsvp-status;
+		/* check if the present rsvp interface element is present in post Maintainence node set*/
 		if($Post_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface[$pre-interface-name==interface-name])
 		{
 			
 	var $post-interface-name	= $Post_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface[$pre-interface-name==interface-name]/interface-name;
 	var $post-index		= $Post_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface[$pre-interface-name==interface-name]/index;
 	var $post-rsvp-status	= $Post_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface[$pre-interface-name==interface-name]/rsvp-status;
+			/*Check if the status changed*/
 			if($pre-rsvp-status!=$post-rsvp-status)
 			{
 expr jcs:output(" The status of Rsvp interface " _ $post-interface-name _ " changed from " _ $pre-rsvp-status _ " to " _ $post-rsvp-status _ " post Maintainence");
@@ -755,11 +870,13 @@ expr jcs:output(" The status of Rsvp interface " _ $post-interface-name _ " chan
 	
 	}
 	
+	/*Go through each node of rsvp-interface element in $Post_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface */
 	for-each($Post_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface)
 	{
 		var $post-interface-name	= interface-name;
 		var $post-index		= index;
 		var $post-rsvp-status	= rsvp-status;
+		/* check if the present rsvp interface element is present in pre Maintainence node set*/
 		if(not($Pre_Maintainence/Restoral/Restoral-rsvp-interface/rsvp-interface[$post-interface-name==interface-name]))
 		{
 	expr jcs:output(" Rsvp interface " _ $post-interface-name _ " with status " _ $post-rsvp-status _ " is newly added Post-Maintainence");
@@ -773,25 +890,32 @@ expr jcs:output(" The status of Rsvp interface " _ $post-interface-name _ " chan
 }
 
 
+/*
+Diff_BFD_Session function gives the differences between pre maintainence and post maintainence output of "show bfd session"
+*/
 
-<func:function name="test:Diff_BFD_Session">
+
+
+<func:function name="automation:Diff_BFD_Session">
 {
 	param $Pre_Maintainence;
 	param $Post_Maintainence;
 	expr jcs:output("\n Pre-Maintenance BFD Sessions  : " _ count($Pre_Maintainence/Restoral/Restoral-bfd/bfd-session));
 	expr jcs:output(" Post-Maintenance BFD Sessions : " _ count($Post_Maintainence/Restoral/Restoral-bfd/bfd-session));
 	
+	/*Go through each node of bfd-session element in $Pre_Maintainence/Restoral/Restoral-bfd/bfd-session */	
 	for-each($Pre_Maintainence/Restoral/Restoral-bfd/bfd-session)
 	{
 		var $pre-session-state		= session-state;
 		var $pre-session-interface	= session-interface;
-		
+		/* check if the present bfd-session element is present in post Maintainence node set*/
 		if($Post_Maintainence/Restoral/Restoral-bfd/bfd-session[$pre-session-interface==session-interface])
 		{
 		
 	
 		var $post-session-state		= $Post_Maintainence/Restoral/Restoral-bfd/bfd-session[$pre-session-interface==session-interface]/session-state;
 		var $post-session-interface	= $Post_Maintainence/Restoral/Restoral-bfd/bfd-session[$pre-session-interface==session-interface]/session-interface;
+			/*Check the state*/
 			if($post-session-state	!=$pre-session-state)
 			{
 	expr jcs:output(" The state of BFD interface " _ $post-session-interface _ " changed from " _ $pre-session-state _ " to " _ $post-session-state	);
@@ -805,11 +929,12 @@ expr jcs:output(" The status of Rsvp interface " _ $post-interface-name _ " chan
 		}
 	}
 
-
+	/*Go through each node of bfd-session element in $Post_Maintainence/Restoral/Restoral-bfd/bfd-session */
 	for-each($Post_Maintainence/Restoral/Restoral-bfd/bfd-session)
 	{
 		var $post-session-state		= session-state;
 		var $post-session-interface	= session-interface;
+		/* check if the present bfd-session element is present in pre Maintainence node set*/
 		if(not($Pre_Maintainence/Restoral/Restoral-bfd/bfd-session[$post-session-interface==session-interface]))
 		{
 	expr jcs:output(" BFD interface " _ $post-session-interface _ " with state " _ $post-session-state _ " is newly added post Post-Maintainence");
@@ -822,26 +947,31 @@ expr jcs:output(" The status of Rsvp interface " _ $post-interface-name _ " chan
 }
 
 
+/*
+Diff_LDP_Sessions function gives the differences between pre maintainence and post maintainence output of "show ldp sessions"
+*/
 
-
-<func:function name="test:Diff_LDP_Sessions">
+<func:function name="automation:Diff_LDP_Sessions">
 {
 	param $Pre_Maintainence;
 	param $Post_Maintainence;
 	expr jcs:output("\n Pre-Maintenance LDP Sessions  : " _ count($Pre_Maintainence/Restoral/Restoral-ldp-session/ldp-session));
 	expr jcs:output(" Post-Maintenance LDP Sessions : " _ count($Post_Maintainence/Restoral/Restoral-ldp-session/ldp-session));
+
 	
+	/*Go through each node of ldp-session element in $Pre_Maintainence/Restoral/Restoral-ldp-session/ldp-session*/	
 	for-each($Pre_Maintainence/Restoral/Restoral-ldp-session/ldp-session)
 	{
 		var $pre-ldp-neighbor-address	= ldp-neighbor-address;
 		var $pre-ldp-session-state	= ldp-session-state;
 		var $pre-ldp-connection-state	= ldp-connection-state;
+		/* check if the present ldp-session element is present in post Maintainence node set*/
 		if($Post_Maintainence/Restoral/Restoral-ldp-session/ldp-session[$pre-ldp-neighbor-address==ldp-neighbor-address])
 		{
 var $post-ldp-neighbor-address	= $Post_Maintainence/Restoral/Restoral-ldp-session/ldp-session[$pre-ldp-neighbor-address==ldp-neighbor-address]/ldp-neighbor-address;
 var $post-ldp-session-state	= $Post_Maintainence/Restoral/Restoral-ldp-session/ldp-session[$pre-ldp-neighbor-address==ldp-neighbor-address]/ldp-session-state;
 var $post-ldp-connection-state	= $Post_Maintainence/Restoral/Restoral-ldp-session/ldp-session[$pre-ldp-neighbor-address==ldp-neighbor-address]/ldp-connection-state;
-
+			/*Check the connection state and session state*/
 			if((($pre-ldp-session-state!=$post-ldp-session-state)||($pre-ldp-connection-state!=$post-ldp-connection-state)))
 			{
 expr jcs:output("\n Pre Maintainence LDP session with neighbor " _ $pre-ldp-neighbor-address _ " state " _ $pre-ldp-session-state _ " connection state " _ $pre-ldp-connection-state);
@@ -856,12 +986,13 @@ expr jcs:output(" LDP session with neighbor address " _ $pre-ldp-neighbor-addres
 	
 		}
 	}
-
+	/*Go through each node of ldp-session element in $Post_Maintainence/Restoral/Restoral-ldp-session/ldp-session*/	
 	for-each($Post_Maintainence/Restoral/Restoral-ldp-session/ldp-session)
 	{
 		var $post-ldp-neighbor-address	= ldp-neighbor-address;
 		var $post-ldp-session-state	= ldp-session-state;
 		var $post-ldp-connection-state	= ldp-connection-state;
+		/* check if the present ldp-session element is present in pre Maintainence node set*/
 		if(not($Pre_Maintainence/Restoral/Restoral-ldp-session/ldp-session[$post-ldp-neighbor-address==ldp-neighbor-address]))
 		{
 			
@@ -873,27 +1004,29 @@ expr jcs:output(" LDP session with neighbor address " _ $post-ldp-neighbor-addre
 }
 
 
+/*
+Diff_mpls_interfaces function gives the differences between pre maintainence and post maintainence output of "show mpls interfaces"
+*/
 
 
 
-
-<func:function name="test:Diff_mpls_interfaces">
+<func:function name="automation:Diff_mpls_interfaces">
 {
 	param $Pre_Maintainence;
 	param $Post_Maintainence;
 	expr jcs:output("\n Pre-Maintenance mpls interfaces  : " _ count($Pre_Maintainence/Restoral/Restoral-mpls-interface/mpls-interface));
 	expr jcs:output(" Post-Maintenance mpls interfaces : " _ count($Post_Maintainence/Restoral/Restoral-mpls-interface/mpls-interface));
-	
+	/*Go through each node of mpls-interface element in  $Pre_Maintainence/Restoral/Restoral-mpls-interface/mpls-interface*/
 	for-each($Pre_Maintainence/Restoral/Restoral-mpls-interface/mpls-interface)
 	{
 		var $pre-interface-name		= interface-name;
 		var $pre-mpls-interface-state	= mpls-interface-state;
-		
+		/* check if the present mpls-interface element is present in post Maintainence node set*/
 		if($Post_Maintainence/Restoral/Restoral-mpls-interface/mpls-interface[$pre-interface-name==interface-name])
 		{
 		var $post-interface-name = $Post_Maintainence/Restoral/Restoral-mpls-interface/mpls-interface[$pre-interface-name==interface-name]/interface-name;
 	var $post-mpls-interface-state	= $Post_Maintainence/Restoral/Restoral-mpls-interface/mpls-interface[$pre-interface-name==interface-name]/mpls-interface-state;
-	
+			/*Check if the state changed*/
 			if($post-mpls-interface-state != $pre-mpls-interface-state)
 			{
 	expr jcs:output(" Mpls interface " _ $pre-interface-name _ " state change from  " _ $pre-mpls-interface-state _ " to " _ $post-mpls-interface-state);
@@ -906,11 +1039,12 @@ expr jcs:output(" LDP session with neighbor address " _ $post-ldp-neighbor-addre
 		
 	}
 
-
+	/*Go through each node of mpls-interface element in $Post_Maintainence/Restoral/Restoral-mpls-interface/mpls-interface*/
 	for-each($Post_Maintainence/Restoral/Restoral-mpls-interface/mpls-interface)
 	{
 		var $post-interface-name		= interface-name;
 		var $post-mpls-interface-state		= mpls-interface-state;
+		/* check if the present mpls-interface element is present in pre Maintainence node set*/
 		if(not($Pre_Maintainence/Restoral/Restoral-mpls-interface/mpls-interface[$post-interface-name==interface-name]))	
 		{
 	expr jcs:output(" Mpls interface " _ $post-interface-name _ " with state " _ $post-mpls-interface-state _ " is newly added Post Maintainence");		
@@ -923,25 +1057,29 @@ expr jcs:output(" LDP session with neighbor address " _ $post-ldp-neighbor-addre
 
 
 
+/*
+Diff_int_desc function gives the differences between pre maintainence and post maintainence output of "show interface description"
+*/
 
 
-
-<func:function name="test:Diff_int_desc">
+<func:function name="automation:Diff_int_desc">
 {
 	param $Pre_Maintainence;
 	param $Post_Maintainence;
 	
-	
+	/*Go through each node of physical-interface element in $Pre_Maintainence/Restoral/Restoral-int-desc/physical-interface*/
 	for-each($Pre_Maintainence/Restoral/Restoral-int-desc/physical-interface)
 	{
 		var $pre-name		= name;
 		var $pre-admin-status	= admin-status;
 		var $pre-oper-status	= oper-status;
+		/* check if the present physical-interface element is present in post Maintainence node set*/
 		if($Post_Maintainence/Restoral/Restoral-int-desc/physical-interface[$pre-name==name])
 		{
 			var $post-name		= $Post_Maintainence/Restoral/Restoral-int-desc/physical-interface[$pre-name==name]/name;
 			var $post-admin-status	= $Post_Maintainence/Restoral/Restoral-int-desc/physical-interface[$pre-name==name]/admin-status;
 			var $post-oper-status	= $Post_Maintainence/Restoral/Restoral-int-desc/physical-interface[$pre-name==name]/oper-status;
+			/* Check if operational status and admin status changed */
 			if(($post-oper-status!=$pre-oper-status)||( $post-admin-status!= $pre-admin-status))
 			{
 		expr jcs:output("\n Pre Maintainence interface " _ $pre-name _ " admin status " _ $pre-admin-status _ " oper status " _ $pre-oper-status);
@@ -956,12 +1094,13 @@ expr jcs:output(" LDP session with neighbor address " _ $post-ldp-neighbor-addre
 
 		
 	}
-
+	/*Go through each node of physical-interface element in $Post_Maintainence/Restoral/Restoral-int-desc/physical-interface*/
 	for-each($Post_Maintainence/Restoral/Restoral-int-desc/physical-interface)
 	{
 		var $post-name		= name;
 		var $post-admin-status	= admin-status;
-		var $post-oper-status	= oper-status;	
+		var $post-oper-status	= oper-status;
+		/* check if the present physical-interface element is present in pre Maintainence node set*/	
 		if(not($Pre_Maintainence/Restoral/Restoral-int-desc/physical-interface[$post-name== name]))
 		{
 expr jcs:output(" Interface " _ $post-name _ " admin status " _ $post-admin-status _ " oper status " _ $post-oper-status _ " is newly added Maintainence");
@@ -971,10 +1110,12 @@ expr jcs:output(" Interface " _ $post-name _ " admin status " _ $post-admin-stat
 	
 }
 
+/*
+Diff_chassis_fpc function gives the differences between pre maintainence and post maintainence output of "show chassis fpc pic-status"
+*/
 
 
-
-<func:function name="test:Diff_chassis_fpc">
+<func:function name="automation:Diff_chassis_fpc">
 {
 	param $Pre_Maintainence;
 	param $Post_Maintainence;
@@ -1050,24 +1191,29 @@ expr jcs:output("The status of FPC PIC with slot " _ $pre-slot _ " and PIC " _ $
 	
 }
 
+/*
+Diff_Isis_Adjacency function gives the differences between pre maintainence and post maintainence output of "show isis Adjacency"
+*/
 
-
-<func:function name="test:Diff_Isis_Adjacency">
+<func:function name="automation:Diff_Isis_Adjacency">
 {
 	param $Pre_Maintainence;
 	param $Post_Maintainence;
 	expr jcs:output("\n Pre-Maintenance ISIS ADJ  : " _ count($Pre_Maintainence/Restoral/Restoral-Isis/isis-adjacency));
 	expr jcs:output(" Post-Maintenance ISIS ADJ : " _ count($Post_Maintainence/Restoral/Restoral-Isis/isis-adjacency));
+	/*Go through each node of isis-adjacency element in $Pre_Maintainence/Restoral/Restoral-Isis/isis-adjacency*/
 
 	for-each($Pre_Maintainence/Restoral/Restoral-Isis/isis-adjacency)
 	{
 		
 		var $pre-interface-name		= interface-name;
 		var $pre-adjacency-state	= adjacency-state;
+		/* check if the present isis-adjacency element is present in post Maintainence node set*/	
 		if($Post_Maintainence/Restoral/Restoral-Isis/isis-adjacency[$pre-interface-name==interface-name])
 		{
 		var $post-interface-name		= $Post_Maintainence/Restoral/Restoral-Isis/isis-adjacency[$pre-interface-name==interface-name]/interface-name;
 		var $post-adjacency-state	= $Post_Maintainence/Restoral/Restoral-Isis/isis-adjacency[$pre-interface-name==interface-name]/adjacency-state;
+			/*Check the state if changed*/
 			if($post-adjacency-state!=$pre-adjacency-state)
 			{ 
 		expr jcs:output(" The state of ISIS " _ $pre-interface-name _ " changed from " _ $pre-adjacency-state _ " to " _ $post-adjacency-state);
@@ -1079,11 +1225,12 @@ expr jcs:output("The status of FPC PIC with slot " _ $pre-slot _ " and PIC " _ $
 		}
 		
 	}
-	
+	/*Go through each node of isis-adjacency element in $Post_Maintainence/Restoral/Restoral-Isis/isis-adjacency*/
 	for-each($Post_Maintainence/Restoral/Restoral-Isis/isis-adjacency)
 	{
 		var $post-interface-name		= interface-name;
 		var $post-adjacency-state		= adjacency-state;
+		/* check if the present isis-adjacency element is present in pre Maintainence node set*/	
 		if(not($Pre_Maintainence/Restoral/Restoral-Isis/isis-adjacency[$post-interface-name== interface-name]))
 		{
 			expr jcs:output(" The ISIS " _ $post-interface-name _ " with state " _ $post-adjacency-state _ " is newly added post Maintainence");
@@ -1093,30 +1240,34 @@ expr jcs:output("The status of FPC PIC with slot " _ $pre-slot _ " and PIC " _ $
 }
 
 
+/*
+Diff_BGP_Summary function gives the differences between pre maintainence and post maintainence output of "show bgp summary"
+*/
 
 
 
-<func:function name="test:Diff_BGP_Summary">
+<func:function name="automation:Diff_BGP_Summary">
 {
 	param 	$Pre_Maintainence;
 	param	$Post_Maintainence;
 	
 expr jcs:output("\n Pre-Maintenance Established BGP sessions  : " _ count($Pre_Maintainence/Restoral/Restoral-Bgp/bgp-peer[(peer-state=="Established")||(peer-state=="ESTABLISHED")]));
 expr jcs:output(" Post-Maintenance Established BGP sessions : " _ count($Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[(peer-state=="Established")||(peer-state=="ESTABLISHED")]));
+	/*Go through each node of bgp-peer element in $Pre_Maintainence/Restoral/Restoral-Bgp/bgp-peer*/
 	
 	for-each($Pre_Maintainence/Restoral/Restoral-Bgp/bgp-peer)
 	{
 		var $pre-peer-as=./peer-as;
 		var $pre-peer-state=./peer-state;
 		var $pre-description=./description;
-		
+		/* check if the present bgp-peer element is present in post Maintainence node set*/
 		if($Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$pre-peer-as==peer-as])
 		{
 			var $post-peer-as	=$Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$pre-peer-as==peer-as]/peer-as;
 			var $post-peer-state	=$Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$pre-peer-as==peer-as]/peer-state;
 			var $post-description	=$Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$pre-peer-as==peer-as]/description;
 			
-			
+			/*Check if the state changed */
 			if(($pre-peer-state!=$post-peer-state)||($pre-description!=$post-description))
 			{
 expr jcs:output("\n Mismatch Found");
@@ -1131,19 +1282,20 @@ expr jcs:output("\n Peer-as " _ $pre-peer-as _ " with state " _ $pre-peer-state 
 		}
 	}
 
+	/*Go through each node of bgp-peer element  in $Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer*/
 	for-each($Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer)
 	{
 		var $post-peer-as=./peer-as;
 		var $post-peer-state=./peer-state;
 		var $post-description=./description;
-		
+		/* check if the present bgp-peer element is present in pre Maintainence node set*/
 		if($Pre_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$post-peer-as==peer-as])
 		{
 			var $pre-peer-as	=$Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$post-peer-as==peer-as]/peer-as;
 			var $pre-peer-state	=$Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$post-peer-as==peer-as]/peer-state;
 			var $pre-description	=$Post_Maintainence/Restoral/Restoral-Bgp/bgp-peer[$post-peer-as==peer-as]/description;
 			
-			
+			/*Check if the state changed */
 			if(($pre-peer-state!=$post-peer-state)||($pre-description!=$post-description))
 			{
 expr jcs:output("\n Mismatch Found");
@@ -1160,27 +1312,34 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 }
 
 
+/*
+Diff_BGP_Summary function gives the differences between pre maintainence and post maintainence output of "show ldp neighbor"
+*/
 
 
-<func:function name="test:Diff_LDP_Neighbor">
+<func:function name="automation:Diff_LDP_Neighbor">
 {
 	param $Pre_Maintainence;
 	param $Post_Maintainence;
 	expr jcs:output("\n Pre-Maintenance LDP neighbors  : " _ count($Pre_Maintainence/Restoral/Restoral-ldp-neighbor/ldp-neighbor));
 	expr jcs:output(" Post-Maintenance LDP neighbors : " _ count($Post_Maintainence/Restoral/Restoral-ldp-neighbor/ldp-neighbor));
 	
+	/*Go through each node of ldp-neighbor element in  $Pre_Maintainence/Restoral/Restoral-ldp-neighbor/ldp-neighbor*/	
 	for-each($Pre_Maintainence/Restoral/Restoral-ldp-neighbor/ldp-neighbor)
 	{
 		var $pre-ldp-neighbor-address	= ldp-neighbor-address;
+		/* check if the present ldp-neighbor element is present in post Maintainence node set*/
 		if(not($Post_Maintainence/Restoral/Restoral-ldp-neighbor/ldp-neighbor[$pre-ldp-neighbor-address==ldp-neighbor-address]))
 		{
 	expr jcs:output(" LDP neighbor " _ $pre-ldp-neighbor-address _ " is not present post Maintainence");
 		}
 	}
 
+	/*Go through each node of ldp-neighbor element in $Post_Maintainence/Restoral/Restoral-ldp-neighbor/ldp-neighbor*/	
 	for-each($Post_Maintainence/Restoral/Restoral-ldp-neighbor/ldp-neighbor)
 	{
 		var $post-ldp-neighbor-address	= ldp-neighbor-address;
+		/* check if the present ldp-neighbor element is present in pre Maintainence node set*/
 		if(not($Pre_Maintainence/Restoral/Restoral-ldp-neighbor/ldp-neighbor[$post-ldp-neighbor-address==ldp-neighbor-address]))
 		{
 	expr jcs:output(" LDP neighbor " _ $post-ldp-neighbor-address _ " is newly added post Maintainence");
@@ -1192,49 +1351,60 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 
 
 
-
-<func:function name="test:View_Pre_Maintenance_State">
+/*
+<func:function name="automation:View_Pre_Maintenance_State">
 {
 	param $File;
 	expr jcs:output($File);
-}
+}*/
 
 
 
 
-<func:function name="test:Show_KRT_Queue">
+<func:function name="automation:Show_KRT_Queue">
 {
 
-	
-	var $Return = test:Show_KRT_Queue_Checker(4,0);
+	/* Show_KRT_Queue initialises the KRT_Queue_checker function with the hard time out of 5 minutes.*/
+	var $Return = automation:Show_KRT_Queue_Checker(4,0);
 	
 
 }
 
-<func:function name="test:Show_KRT_Queue_Checker">
+/*
+		Show_KRT_Queue_Checker first invokes jcs:sleep(60).The script waits for 60 sec .After that checks whether $Count is zero.
+		If $Count is zero it means hard time out occured ,a error prompt is given to user that Queue didnt converge in 
+		5 minutes.If $Count is not zero then wait the script checks whether all the nodes of "show krt queue" output are 
+		zero.If any one of them is not zero then Show_KRT_Queue_Checker function is called again with reduced $Count value and $Perfect as zero. 
+		If all nodes of "show krt queue" output are zero it is checked whether $Perfect is 1.If it is "one" it means that 
+		krt queue converged in the before executing Show_KRT_Queue_Checker function.So code returns to Traffic_Removal_Function template.
+		Else if  $Perfect is not zero then Show_KRT_Queue_Checker function is called again with reduced $Count value and $Perfect as "one". 
+		
+	*/
+
+<func:function name="automation:Show_KRT_Queue_Checker">
 {
 	param $Count;
 	param $Perfect;
 	var $show_krt_queue	= <command> "show krt queue";
 	var $o_show_krt_queue	= jcs:invoke($show_krt_queue);
 	expr jcs:output(" Waiting for 60 secs");
-	expr jcs:sleep( 60 );
+	expr jcs:sleep( 60 );	/* Wait for 60 seconds*/
 	
-	
+	/* Check if hard time-out is expired */
 	if($Count==0)
 	{
 		
-		expr test:Quit_Prompt_Function("\n Queue didnt get converge in 10 minutes .Something is wrong.!");
+		expr automation:Quit_Prompt_Function("\n Queue didnt get converge in 10 minutes .Something is wrong.!");
 		
 	}
 	for-each($o_show_krt_queue/krt-queue)
 	{
-		
+		/*Check if KRT Queue output is empty for each node*/
 		if(./krtq-queue-length!=0)
 		{ 	
 			
-			
-			var $Return = test:Show_KRT_Queue_Checker($Count - 1,0);
+			/*if krtq-queue-length not equal to zero then call Show_KRT_Queue_Checker with reduced $Count and $Perfect as "0"*/
+			var $Return = automation:Show_KRT_Queue_Checker($Count - 1,0);
 			<func:result select="$Return">;	
 			
 			
@@ -1242,6 +1412,7 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 		}
 	}
 	expr jcs:output("\n KRT Queue is Empty ");
+	/* If $Perfect is "1" then return to previous function called. ultimately return to template Traffic_Removal_Function */
 	if($Perfect==1)
 	{
 			
@@ -1252,7 +1423,8 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	}
 	else
 	{
-			var $Return = test:Show_KRT_Queue_Checker($Count - 1,1);
+			/*if $Perfect not equal to "1" then call Show_KRT_Queue_Checker function with reduced $Count and $Perfect as "1"*/
+			var $Return = automation:Show_KRT_Queue_Checker($Count - 1,1);
 			
 			<func:result select="$Return">;
 	}
@@ -1260,8 +1432,17 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	
 }
 
+/*
+Quit_Prompt_Function will implement a prompt which gives three options to the user
+ 1) continue 	-----> 	to go to next step
+ 2) quit 	-----> 	to exit from the script
+ 3) show	-----> 	choosing show will call View_System_Running function by which the user can run the operational commands and check the operational status 
+			of the router	
+ if the user enters anything other than these three words Quit_Prompt_Function is called again
+*/	
 
-<func:function name="test:Quit_Prompt_Function">
+
+<func:function name="automation:Quit_Prompt_Function">
 {
 	param $Display;
 	expr jcs:output($Display);
@@ -1275,8 +1456,8 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	{
 		if($var=="show")
 		{
-			expr test:View_System_Running();
-			expr test:Quit_Prompt_Function($Display);
+			expr automation:View_System_Running();
+			expr automation:Quit_Prompt_Function($Display);
 		}
 		else
 		{
@@ -1284,7 +1465,7 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 			{
 		
 				<xsl:message> "Wrong Option . Please retry\n";
-				expr test:Quit_Prompt_Function($Display);
+				expr automation:Quit_Prompt_Function($Display);
 				
 			
 			}
@@ -1292,73 +1473,68 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	}
 	
 }
-
-<func:function name="test:software_version">
+/*
+software_version Function is used to check the software version of the two routing engines.Give an error prompt if they are not equal
+*/
+<func:function name="automation:software_version">
 {
-	var $Show_Version	= <command> "show version";
-	var $O_Show_Version	= jcs:invoke($Show_Version);
 	
+	var $Show_Version	= <command> "show version";
+	var $O_Show_Version	= jcs:invoke($Show_Version);	/* invoke "show version" on main routing engine*/
+		
+		/* Check if node with element name = "junos" exists. If it does then the comment at the path contains the Junos code versio*/
 		if($O_Show_Version/package-information[name=="junos"]/comment)
 		{
-			expr jcs:output("\n The version of the router is " _ $O_Show_Version/package-information[name=="junos"]/comment);
+			/* Printing the Junos code version of the main routing engine*/
+			expr jcs:output("\n The JUNOS version of the router is " _ $O_Show_Version/package-information[name=="junos"]/comment);
 			var $Result_Master=$O_Show_Version/package-information[name=="junos"]/comment;
 			
+			/*Check the code version of other routing engine*/
 			var $Show_Version_other	= <command> "show version invoke-on other-routing-engine";
 			var $O_Show_Version_other	= jcs:invoke($Show_Version_other);
 	
 			if($O_Show_Version_other/multi-routing-engine-item/software-information/package-information[name=="junos"]/comment)
 			{
 				var $Result_Backup	=$O_Show_Version_other/multi-routing-engine-item/software-information/package-information[name=="junos"]/comment;
-				expr jcs:output("\n The version of the other-routing-engine is " _ $Result_Backup);
+				expr jcs:output("\n The JUNOS version of the other-routing-engine is " _ $Result_Backup);
+
+				/*Check if the JUNOS code version of main routing engine and other routing engine match. If they dont match give an error
+					prompt saying version mismatch*/
 				if($Result_Backup!=$Result_Master)
 				{
-					expr test:Quit_Prompt_Function("\n Codes doesnt match on two routing engines. Please quit the script.");
+					expr automation:Quit_Prompt_Function("\n The JUNOS version doesnt match on two routing engines. Please quit the script.");
 				}
 		
 		
 			}
 			else
 			{
-				expr test:Quit_Prompt_Function("\n The Junos version not present on other routing engine");
+				expr automation:Quit_Prompt_Function("\n The Junos version not present on other routing engine");
 			}
 		}
 		else
 		{
-			expr test:Quit_Prompt_Function("\n The Junos version not present ");
+			expr automation:Quit_Prompt_Function("\n The Junos version not present ");
 		}
 	
 	
 }
 
-<func:function name="test:software_version_other_routing_engine">
+
+
+/*
+Check_if_File_Exits function checks if xml file of pre maintanence that is saved at "/var/home/full/.If file is present then the function returns to the main script.
+If the file not script enables the user to give the file name by calling Restoral_File_Finder Function.
+*/
+<func:function name="automation:Check_if_File_Exits">
 {
-	var $Show_Version	= <command> "show version invoke-on other-routing-engine";
-	var $O_Show_Version	= jcs:invoke($Show_Version);
-	
-	if($O_Show_Version/multi-routing-engine-item/software-information/package-information[name=="junos"]/comment)
-	{
-		expr jcs:output("\n The version of the other-routing-engine is " _ $O_Show_Version/multi-routing-engine-item/software-information/package-information[name=="junos"]/comment);
-		var $Result	=$O_Show_Version/multi-routing-engine-item/software-information/package-information[name=="junos"]/comment;
-		<func:result select="$Result">;
-	}
-	else
-	{
-		expr test:Quit_Prompt_Function("\n The Junos version not present ");
-	}
-	
-	
-}
+	var $File_Name	=	automation:File_Name_Creater() _ ".xml";
 
-
-<func:function name="test:Check_if_File_Exits">
-{
-	var $File_Name	=	test:File_Name_Creater() _ ".xml";
-
-	if(test:File_Finder($File_Name)=="no")
+	if(automation:File_Finder($File_Name)=="no")
 	{
 		expr jcs:output("\n You don't have the restoral in local disk");
 		expr jcs:output("\n You have to specify the file name in local disk ");
-		var $Restoral_File	=test:Restoral_File_Finder();
+		var $Restoral_File	=automation:Restoral_File_Finder();
 		<func:result select="$Restoral_File">;
 	
 	}
@@ -1370,7 +1546,14 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	}
 }
 
-<func:function name="test:File_Finder">
+/*
+
+File_Finder function searches whether file with the name $File_name is present at "/var/home/full/" path.
+It returns 	"yes" if file is present
+		"no" if file not present
+
+*/
+<func:function name="automation:File_Finder">
 {
 	param $File_name;
 	var $Code_path_file		= "/var/home/full/";
@@ -1395,9 +1578,16 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	}
 }
 
+/*
+
+File_Name_Creater function creates a string File_name in the format "[Router name][month][day][year]"
+(File_name) ------->	The pre maintenance configuration of the router is saved with this name.
+(File_name).xml---->	 This xml file is used to store pre maintenance state of the router.This xml file contains the output of following commands
 
 
-<func:function name="test:File_Name_Creater">
+*/
+
+<func:function name="automation:File_Name_Creater">
 {
 
 	var $regex 		= "([[:digit:]]*)-([[:digit:]]*)-([[:digit:]]*) ([0-9]*):([0-9]*):([0-9]*).*";
@@ -1409,22 +1599,29 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	<func:result select="$File_name">;
 }
 
+/*
+Restoral_File_Finder Function asks user whether the file is present in local disk at "var/home/full"
+If user enters "no" it gives an error prompt saying "trafffic can't be restoted without have the pre maintenence state xml file.
+If file is present then the user has the enter the file name.The script checks whether the file name entered by user is present 
+by calling File_Finder function. If file exists then Restoral_File_Finder returns to the main script.
+If wrong file name is entered then Restoral_File_Finder function is called again
 
+*/
 
-<func:function name="test:Restoral_File_Finder">
+<func:function name="automation:Restoral_File_Finder">
 {
-	var $Option	= jcs:get-input("\n Is the file present in local disk (yes/no) ");
+	var $Option	= jcs:get-input("\n Is the file present in local disk at var/home/full (yes/no) ");
 	if($Option=="yes")
 	{
 		var $Restoral_xml_file		= jcs:get-input("\n Please enter the xml file name that is present in /var/home/full/ ");
-		var $Result			= test:File_Finder($Restoral_xml_file);
+		var $Result			= automation:File_Finder($Restoral_xml_file);
 		if($Result=="yes")
 		{
 			<func:result select="$Restoral_xml_file">;
 		}
 		else
 		{
-			var $Retry_Restoral_xml_file		= test:Restoral_File_Finder();
+			var $Retry_Restoral_xml_file		= automation:Restoral_File_Finder();
 			<func:result select="$Retry_Restoral_xml_file">;
 			
 		}
@@ -1434,12 +1631,12 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 		if($Option=="no")
 		{
 			
-			expr test:Quit_Prompt_Function("\n Pre maintenace file is needed for Traffic Restoration");
+			expr automation:Quit_Prompt_Function("\n Pre maintenace file is needed for Traffic Restoration");
 		}
 		else
 		{
 			expr jcs:output("\n Wrong option choosen .Please retry ");
-			var $Restoral_xml_file		= test:Restoral_File_Finder();
+			var $Restoral_xml_file		= automation:Restoral_File_Finder();
 			<func:result select="$Restoral_xml_file">;	
 		}
 	}
@@ -1447,19 +1644,17 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 }
 
 
-<func:function name="test:XML_Path_Finder">
-{
-	
-		var $Source_File		=jcs:get-input("\n Please enter the xml file name ");
-		expr jcs:output("\n Downloading the xml file " _ $Source_File);
-		var $Destination_File	="/var/home/full/" _ $Source_File;	
-		var $Success_Destination_File = test:FTP_File_Transfer_Software($Source_File,$Destination_File);	
-		<func:result select="$Success_Destination_File">;
-	
 
-}
+/*Continue_Prompt_Function will implement a prompt which gives three options to the user
+ 1) yes 	-----> 	to go to next step
+ 2) quit 	-----> 	to exit from the script
+ 3) show	-----> 	choosing show will call View_System_Running function by which the user can run the operational commands and check the operational status 
+			of the router
+ if the user enters anything other than these three words Continue_Prompt_Function is called again	
+*/
 
-<func:function name="test:Continue_Prompt_Function">
+
+<func:function name="automation:Continue_Prompt_Function">
 {
 	param $Display;
 	expr jcs:output($Display);
@@ -1474,8 +1669,8 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	{
 		if($var=="show")
 		{
-			expr test:View_System_Running();
-			expr test:Continue_Prompt_Function();
+			expr automation:View_System_Running();
+			expr automation:Continue_Prompt_Function($Display);
 		}
 		else
 		{
@@ -1483,7 +1678,7 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 			{
 		
 				<xsl:message> "Wrong Option . Please retry \n";
-				expr test:Continue_Prompt_Function();
+				expr automation:Continue_Prompt_Function($Display);
 				
 			
 			}
@@ -1494,69 +1689,8 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 
 
 
-<func:function name="test:FTP_File_Transfer_Software">
-{
-	param $Source_File;
-	param $Destination_File;
-	var $FTP_IP 		= jcs:get-input("\n Please enter the IP address of the FTP server " );
-	var $FTP_Hostname	= jcs:get-input("\n Please enter user name of the FTP server " );
-	var $Password		= jcs:get-secret("\n Please enter the password ");
-	
-	var $FTP_Config_path	= test:FTP_Config_Path_Finder();
-	
-	var $Temp		="ftp://" _ $FTP_Hostname _ ":" _ $Password _ "@" _ $FTP_IP _ $FTP_Config_path _  $Source_File;
-
-	var $file-copy-xml-rpc = <file-copy> {
-     			 	<source> $Temp;
-      				<destination> $Destination_File;
-						
-    						}
-	expr jcs:output("\n Source file :" _ $Temp);
-	expr jcs:output("\n Destination file : " _ $Destination_File);
-	var $results-xml = jcs:invoke($file-copy-xml-rpc);
-	if ($results-xml//self::xnm:error)
-	{
-		expr jcs:output($results-xml);
-		expr jcs:output("\n File transer failed ! Please try again ");
-		var $Success_Destination_File = test:XML_Path_Finder();
-		<func:result select="$Success_Destination_File">;
-	}
-	else
-	{
-		expr jcs:output("\n File transfered successfully ! ");
-		<func:result select="$Destination_File">;
-	}
-	
-}
-
-
-
-
-<func:function name="test:FTP_Config_Path_Finder">
-{
-	var $FTP_Config_option	= jcs:get-input("\n Is the file at /prod/img directory at TFTP server (yes/no) ");
-	if($FTP_Config_option=="yes")
-	{
-		var $FTP_Config_path= "/prod/img/";
-		<func:result select="$FTP_Config_path">;
-	}
-	else
-	{
-		if($FTP_Config_option=="no")
-		{
-			var $FTP_Config_path=jcs:get-input("\n please give the path from root ");
-			<func:result select="$FTP_Config_path">;
-		}
-		else
-		{
-			var $FTP_Config_path	= test:FTP_Config_Path_Finder();
-			<func:result select="$FTP_Config_path">;
-		}
-	}
-}
-
-
-<func:function name="test:Diff_route_summary">
+/* Diff_route_summary function displays the number of routers for each table pre maintainence and post maintainence */
+<func:function name="automation:Diff_route_summary">
 {
 	param $Pre_Maintainence;
 	param $Post_Maintainence;
@@ -1578,7 +1712,8 @@ expr jcs:output("\n Peer-as " _ $post-peer-as _ " with state " _ $post-peer-stat
 	
 }
 
-<func:function name="test:Diff_mpls_terse">
+/*Diff_mpls_terse function displays the transit lsp count of pre maintainence and post maintainence */
+<func:function name="automation:Diff_mpls_terse">
 {
 	param $Pre_Maintainence;
 	param $Post_Maintainence;
@@ -1603,8 +1738,8 @@ expr jcs:output(" Post-Maintenance " _ $post-session-type _ " Total:" _ $post-co
 		
 }
 
-
-<func:function name="test:Diff_chassis_alarms">
+/*Diff_chassis_alarms function displays the count of alarms pre maintainence and post maintainence and also list the new alarms added and alarms missing post maintainence*/
+<func:function name="automation:Diff_chassis_alarms">
 {
 	param $Pre_Maintainence;
 	param $Post_Maintainence;
@@ -1637,15 +1772,18 @@ expr jcs:output(" Post-Maintenance " _ $post-session-type _ " Total:" _ $post-co
 }
 
 
+/*
+View_System_Running allows the user to check the operational status of the router by making user run operational commands on the router from script
+*/
 
 
-<func:function name="test:View_System_Running">
+<func:function name="automation:View_System_Running">
 {
 	
-		var $Command = jcs:get-input("\n Please enter the command ");
+		var $Command = jcs:get-input("\n Please enter the command ");		/* Get the command from the user*/
 		var $Show_Command = <command> $Command;
-		var $O_Show_Command =  jcs:invoke($Show_Command);
-		expr jcs:output($O_Show_Command);
+		var $O_Show_Command =  jcs:invoke($Show_Command);			/*invoke the user entered command*/
+		expr jcs:output($O_Show_Command);					/* show the output*/
 		
 		
 }

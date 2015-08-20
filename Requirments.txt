@@ -1,0 +1,109 @@
+BR_Router_Upgrade_MOP_Automation Requirements
+
+Requested by Syed Malik/VZ Ops
+
+High level Overview
+	
+Verizon does router upgrades regularly which involves in removal of the traffic before upgrade and addition of the traffic 
+post upgrade.Verizon wants to automate this whole upgrade process . As a first step towards acheiving a generic code which 
+works on all routers,the version 1 is expected to work on BR routers.
+
+Functional Details
+
+Here is the expected functionality for BR router upgrade :
+				
+	
+	
+	1) 	Save the existing configuration in both routing engines at "/var/home/full/"
+
+	2) 	Search for available Junos codes at "/var/home/full/" .Prompt the user to choose required code
+	
+	3) 	If the required Junos code is not available search for available codes in other routing engine.
+	
+	4) 	After the user selects the required Junos code make sure that the selected Junos code is staged in both routing 
+		engines
+	
+	5) 	Check whether the router is booted from flash disk . Use "show system storage" and ensure the router properly 
+		booted from the flash disk.This would be indicated by “ad0xxx” mounted on “/”.
+		( JUNOS 13-3R3-S8 - MX - Code Upgrade document,chapter 5.2)
+	
+	6) 	Ensure the “compact flash” and “disk” are in the bootlist .Use "sysctl –a | grep bootdev" and 
+		interrupt the program if “compact flash” and “disk” are not present in the bootlist.
+	
+	7) 	Remove the traffic .Follow "gdnm-1125 (1)" document.
+
+	8) 	Check whether VOIP traffic by running " show aps ", " show bgp summary| match 1661 ",
+		" show bfd session | match ^152 " , " show vrrp ".
+
+	9) 	If VOIP traffic not present .First Deactivate External BGP Neighbors.
+
+	10) 	Check for KRT queue for every 60 secs . Proceed to next step if you get queue empty two consequtive times.
+
+	11) 	Deactivate routing instances if already present pre maintenance.
+
+	12)	Set ISIS in overload.
+
+	13)	Deactivate BGP protocols.
+
+	14)	Check for KRT queue for every 60 secs . Proceed to next step if you get queue empty two consequtive times.
+	
+	15)	Deactivate protocols.
+	
+	16) 	Deactivate routing options if already present pre maintenance.
+
+	17)	Deactivate chassis redundancy .
+
+	18)	Run "request system snapshot" on maintenance routing engine . Check whether it returns any error.
+	
+	19)	Run "request system snapshot" on other routing engine . Check whether it returns any error.
+
+	20)	Give out the commands to do code upgrade for both routing engines .
+
+	21) 	After both routing engines are updated to new JUNOS code. Traffic should be restored.
+	
+	22) 	First check whether both routing engines are upgraded to same JUNOS code.
+	
+	23)	Check whether Re0 is configured as "master" else run " request chassis routing-engine master switch " to make re0 as master . Interrupt the script if re0 is not configured
+		as master.
+
+	24)	Activate routing-options if routing-options are deactivated pre maintenance.
+
+	25)	Activate chassis redundancy .
+
+	26)	Activate protocols.
+	
+	27)	Check for KRT queue for every 60 secs . Proceed to next step if you get queue empty two consequtive times.
+
+	28)	Activate BGP.
+
+	29)	Check for KRT queue for every 60 secs . Proceed to next step if you get queue empty two consequtive times.
+
+	30)	Restore Pre Maintenance configuration of  ISIS.
+
+	31)	Activate routing-instances.
+
+	32)	Activate External BGP neighbors which were deactivated pre maintenance.
+
+	33) 	List out all the differences of pre maintenance and post maintenance  of all the below outputs
+			
+			a)		show chassis fpc pic-status
+			b)		show isis Adjacency
+			c)		show bgp summary
+			d)		show ldp neighbor
+			e)		show ldp session
+			f)		show bfd session
+			g)		show interface description
+			i)		show mpls interfaces
+			j)		show rsvp interfaces
+			k)		show chassis alarms
+			l)		show mpls terse
+			m)		show route summary
+			n)		show chassis environment
+	
+
+	
+
+	
+
+
+
